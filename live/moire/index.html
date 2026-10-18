@@ -1,0 +1,2726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moiré Lattice Generator</title>
+    <script src="tailwind.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; }
+        #canvas { image-rendering: crisp-edges; max-width:100%; height:auto; }
+        #shaderCanvas { position:absolute; top:0; left:0; pointer-events:none; max-width:100%; height:auto; display:none; }
+        #meshCanvas   { position:absolute; top:0; left:0; cursor:crosshair; max-width:100%; height:auto; }
+        #canvasWrap   { position:relative; box-shadow:0 10px 30px rgba(0,0,0,.5); display:inline-block; }
+        @media (max-width:768px) { .controls { border-right:none !important; border-bottom:1px solid #374151; } }
+        input[type="range"] { cursor:pointer; }
+        select, input[type="color"] { cursor:pointer; }
+        button { cursor:pointer; transition:background-color 0.15s ease; }
+        .layer-on  { background-color:#059669; }
+        .layer-off { background-color:#52525b; }
+        .slabel { font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; color:#71717a; margin-bottom:0.4rem; }
+        .row { display:flex; justify-content:space-between; font-size:0.72rem; margin-bottom:0.2rem; }
+        .sep { border-top:1px solid #27272a; padding-top:0.75rem; margin-top:0.25rem; }
+        #dlModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100; align-items:center; justify-content:center; }
+        #dlModal.open { display:flex; }
+        #dlBox { background:#18181b; border:1px solid #3f3f46; border-radius:1rem; padding:1.5rem; width:300px; }
+        /* Mesh control point knob */
+        .cp-knob { position:absolute; width:12px; height:12px; border-radius:50%; background:#f59e0b; border:2px solid #fff; transform:translate(-50%,-50%); cursor:grab; touch-action:none; }
+        .cp-knob:active { cursor:grabbing; }
+        .shader-on  { background-color:#7c3aed; }
+        .shader-off { background-color:#52525b; }
+        .warp-layer-on  { background-color:#0891b2; color:#fff; }
+        .warp-layer-off { background-color:#3f3f46; color:#71717a; }
+        .layer-warp-on  { background:#7c3aed; color:#fff; }
+        .layer-warp-off { background:#3f3f46; color:#71717a; }
+        .layer-flip-btn { background:#44403c; color:#a8a29e; }
+        .layer-flip-btn:hover { background:#57534e; color:#e7e5e4; }
+        .lock-btn { background:none; border:none; cursor:pointer; font-size:0.75rem; opacity:0.4; padding:0 2px; transition:opacity 0.15s, color 0.15s; line-height:1; }
+        .lock-btn:hover { opacity:0.85; }
+        .lock-btn.locked { opacity:1; color:#f59e0b; }
+        /* Editable value fields */
+        input[type="number"] { -moz-appearance:textfield; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+        .val-edit { width:52px; text-align:right; font-size:0.72rem; background:#27272a; border:1px solid #3f3f46; border-radius:4px; padding:1px 4px; color:#d4d4d8; cursor:text; }
+        .val-edit:focus { outline:none; border-color:#059669; background:#1c1c1e; }
+        .lightbox-on  { background-color:#b45309; color:#fff; }
+        .lightbox-off { background-color:#52525b; color:#d4d4d8; }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+<div class="flex flex-col md:flex-row h-screen">
+
+    <!-- ══ Sidebar ══════════════════════════════════════════════════ -->
+    <div class="w-full md:w-80 bg-zinc-900 border-b md:border-r border-zinc-800 p-4 overflow-y-auto flex flex-col controls">
+        <div class="mb-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
+                    <p class="text-zinc-400 text-xs">Live Lattice Generator</p>
+                </div>
+                <button onclick="resetLocks()" class="px-2 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs" title="Clear all section locks">🔓 Unlock</button>
+                <button onclick="randomise()" class="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 rounded-lg text-xs font-semibold tracking-wide" title="Randomise all parameters (shaders stay off)">&#x2684; Randomise</button>
+            </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="mb-3 p-2 rounded-xl border border-zinc-700 bg-zinc-800/30">
+            <p class="slabel mb-1.5">Presets</p>
+            <div class="flex gap-1.5 mb-1.5">
+                <select id="presetSelect" class="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs truncate">
+                    <option value="">— select —</option>
+                </select>
+                <button onclick="loadPreset()" class="px-2.5 py-1.5 bg-zinc-600 hover:bg-zinc-500 rounded-lg text-xs font-medium">Load</button>
+                <button onclick="deletePreset()" class="px-2.5 py-1.5 bg-red-900 hover:bg-red-800 rounded-lg text-xs font-medium">Del</button>
+            </div>
+            <button onclick="savePresetAs()" class="w-full py-1.5 bg-blue-800 hover:bg-blue-700 rounded-lg text-xs font-medium">+ Save as new preset…</button>
+        </div>
+
+        <div class="space-y-3 flex-1">
+
+            <!-- Pattern & Blend -->
+            <div>
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Pattern</p>
+                    <button class="lock-btn" id="lock-pattern" onclick="toggleLock('pattern')" title="Lock Pattern from randomise">🔓</button>
+                </div>
+                <select id="shape" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="lines" selected>Parallel Lines</option>
+                    <option value="radial">Radial / Circles</option>
+                    <option value="iso-circles">Isometric Circles</option>
+                    <option value="iso-dots">Isometric Dots</option>
+                    <option value="grid">Square Grid</option>
+                    <option value="hexagon">Hexagon (isolated)</option>
+                    <option value="hex-tile">Hex Tile (honeycomb)</option>
+                    <option value="triangle">Isometric Triangles</option>
+                    <option value="svg-import">SVG Import…</option>
+                </select>
+                <!-- SVG import panel -->
+                <div id="svgImportUI" class="hidden mb-2 p-2 rounded-lg bg-zinc-900 border border-dashed border-violet-600">
+                    <div class="flex gap-1.5">
+                        <button onclick="document.getElementById('svgFileInput').click()" class="flex-1 py-1.5 text-xs rounded bg-violet-700 hover:bg-violet-600 font-medium">📂 Load SVG file…</button>
+                        <input type="file" id="svgFileInput" accept=".svg,image/svg+xml" class="hidden">
+                    </div>
+                    <p id="svgImportName" class="text-xs text-emerald-400 mt-1 truncate"></p>
+                    <p class="text-xs text-zinc-500 mt-0.5">Cell Spacing = tile gap &nbsp;·&nbsp; Cell Size = motif scale</p>
+                </div>
+                <div class="row"><span>Blend Mode</span></div>
+                <select id="blendMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="source-over" selected>Normal</option>
+                    <option value="difference">Difference</option>
+                    <option value="xor">XOR</option>
+                    <option value="screen">Screen</option>
+                    <option value="overlay">Overlay</option>
+                    <option value="multiply">Multiply</option>
+                    <option value="exclusion">Exclusion</option>
+                    <option value="color-dodge">Color Dodge</option>
+                    <option value="hard-light">Hard Light</option>
+                </select>
+                <div class="row"><span>Blend Strength</span><span id="val-blendStrength">100</span></div>
+                <input type="range" id="blendStrength" min="0" max="100" value="100" class="w-full accent-emerald-600">
+            </div>
+
+            <!-- Grid -->
+            <div class="sep">
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Grid</p>
+                    <button class="lock-btn" id="lock-grid" onclick="toggleLock('grid')" title="Lock Grid from randomise">🔓</button>
+                </div>
+                <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">26</span></div>
+                <input type="range" id="cellCount" min="5" max="120" value="26" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">59</span></div>
+                <input type="range" id="cellSize" min="2" max="120" value="59" class="w-full accent-emerald-600 mb-1">
+                <div class="row"><span>&#x3b; Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-cellSizeOscSpeed">0.00</span></div>
+                <input type="range" id="cellSizeOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-1">
+                <div class="row"><span>&#x3b; Osc Depth <span class="text-zinc-500 text-xs">(±px amplitude)</span></span><span id="val-cellSizeOscDepth">0</span></div>
+                <input type="range" id="cellSizeOscDepth" min="0" max="60" step="1" value="0" class="w-full accent-purple-500 mb-2">
+                <div class="row"><span>Stroke</span><span id="val-stroke">5.00</span></div>
+                <input type="range" id="stroke" min="1" max="20" value="5" step="0.5" class="w-full accent-emerald-600">
+            </div>
+
+            <!-- Warp -->
+            <div class="sep">
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Warp</p>
+                    <button class="lock-btn" id="lock-warp" onclick="toggleLock('warp')" title="Lock Warp from randomise">🔓</button>
+                </div>
+                <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="none">None</option>
+                    <option value="mesh">Mesh (drag control points)</option>
+                    <option value="flag" selected>Flag — Centre Bulge</option>
+                    <option value="sine">Sine (global)</option>
+                    <option value="ripple">Ripple (global)</option>
+                </select>
+                <!-- Mesh warp controls -->
+                <div id="meshControls" class="hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs text-zinc-400">Mode</label>
+                        <select id="meshMode" class="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs">
+                            <option value="fixed">Fixed (world-space)</option>
+                            <option value="layer">Follows Layer</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 mb-2">
+                        <button onclick="resetMesh()" class="py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs">↺ Reset</button>
+                        <button id="meshEditBtn" onclick="toggleMeshEdit()" class="py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">✎ Edit</button>
+                    </div>
+                    <div class="row"><span>Strength</span><span id="val-meshStrength">100</span></div>
+                    <input type="range" id="meshStrength" min="0" max="200" value="100" class="w-full accent-amber-500 mb-2">
+                </div>
+                <!-- Global warp controls (sine/flag/ripple) -->
+                <div id="globalWarpControls">
+                    <div class="row"><span>Strength</span><span id="val-warpStrength">80</span></div>
+                    <input type="range" id="warpStrength" min="0" max="80" value="80" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">100</span></div>
+                    <input type="range" id="warpRadius" min="5" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.00</span></div>
+                    <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-2">
+                    <div class="row"><span>Warp → RGB Drive <span class="text-zinc-500 text-xs">(multiplier)</span></span><span id="val-warpRgbDrive">0.00</span></div>
+                    <input type="range" id="warpRgbDrive" min="0" max="5" value="0" step="0.05" class="w-full accent-rose-500 mb-2">
+                </div>
+                <!-- Warp layer select -->
+                <div class="mt-2">
+                    <p class="text-xs text-zinc-400 mb-1">Apply warp to</p>
+                    <div class="flex gap-1">
+                        <button id="warpL1Btn" onclick="toggleWarpLayer(1)" class="flex-1 py-1 text-xs rounded warp-layer-on">L1</button>
+                        <button id="warpL2Btn" onclick="toggleWarpLayer(2)" class="flex-1 py-1 text-xs rounded warp-layer-on">L2</button>
+                        <button id="warpL3Btn" onclick="toggleWarpLayer(3)" class="flex-1 py-1 text-xs rounded warp-layer-on">L3</button>
+                        <button onclick="invertWarpLayers()" class="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300" title="Invert layer selection">⇅</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between mt-2">
+                    <label class="text-xs text-zinc-400">Animate Warp</label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="animateWarp" class="sr-only peer">
+                        <div class="w-10 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Layers -->
+            <div class="sep space-y-3">
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Layers</p>
+                    <button class="lock-btn" id="lock-layers" onclick="toggleLock('layers')" title="Lock Layers from randomise">🔓</button>
+                </div>
+
+                <!-- Layer 1 -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Layer 1</span>
+                        <button id="layer1Toggle" onclick="toggleLayer(1)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-zinc-400 w-10">Color</span>
+                        <input type="color" id="layer1Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
+                    </div>
+                    <div class="row"><span>Opacity</span><span id="val-layer1Opacity">100</span></div>
+                    <input type="range" id="layer1Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>RGB Shift</span><span id="val-layer1RgbShift">0</span></div>
+                    <input type="range" id="layer1RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">7.9</span></div>
+                    <input type="range" id="layer1Speed" min="-100" max="100" value="42" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
+                    <input type="range" id="layer1OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset Y</span><span id="val-layer1OffsetY">0</span></div>
+                    <input type="range" id="layer1OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="flex gap-1.5">
+                        <button id="layerWarp1Btn" onclick="toggleLayerWarp(1)" class="flex-1 py-1 text-xs rounded font-medium layer-warp-on" title="Toggle warp for this layer">⦲ Warp</button>
+                        <button onclick="flipLayerSpeed(1)" class="layer-flip-btn px-3 py-1 text-xs rounded" title="Reverse rotation direction">⇄ Rev</button>
+                    </div>
+                </div>
+
+                <!-- Layer 2 -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Layer 2</span>
+                        <button id="layer2Toggle" onclick="toggleLayer(2)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-zinc-400 w-10">Color</span>
+                        <input type="color" id="layer2Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
+                    </div>
+                    <div class="row"><span>Opacity</span><span id="val-layer2Opacity">100</span></div>
+                    <input type="range" id="layer2Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>RGB Shift</span><span id="val-layer2RgbShift">0</span></div>
+                    <input type="range" id="layer2RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">4.0</span></div>
+                    <input type="range" id="layer2Speed" min="-100" max="100" value="31" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
+                    <input type="range" id="layer2OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset Y</span><span id="val-layer2OffsetY">0</span></div>
+                    <input type="range" id="layer2OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="flex gap-1.5">
+                        <button id="layerWarp2Btn" onclick="toggleLayerWarp(2)" class="flex-1 py-1 text-xs rounded font-medium layer-warp-on" title="Toggle warp for this layer">⦲ Warp</button>
+                        <button onclick="flipLayerSpeed(2)" class="layer-flip-btn px-3 py-1 text-xs rounded" title="Reverse rotation direction">⇄ Rev</button>
+                    </div>
+                </div>
+
+                <!-- Layer 3 -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Layer 3</span>
+                        <button id="layer3Toggle" onclick="toggleLayer(3)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-zinc-400 w-10">Color</span>
+                        <input type="color" id="layer3Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
+                    </div>
+                    <div class="row"><span>Opacity</span><span id="val-layer3Opacity">100</span></div>
+                    <input type="range" id="layer3Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>RGB Shift</span><span id="val-layer3RgbShift">0</span></div>
+                    <input type="range" id="layer3RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-4.0</span></div>
+                    <input type="range" id="layer3Speed" min="-100" max="100" value="-31" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
+                    <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
+                    <input type="range" id="layer3OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="flex gap-1.5">
+                        <button id="layerWarp3Btn" onclick="toggleLayerWarp(3)" class="flex-1 py-1 text-xs rounded font-medium layer-warp-on" title="Toggle warp for this layer">⦲ Warp</button>
+                        <button onclick="flipLayerSpeed(3)" class="layer-flip-btn px-3 py-1 text-xs rounded" title="Reverse rotation direction">⇄ Rev</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shaders -->
+            <div class="sep">
+                <p class="slabel">Shaders</p>
+                <!-- Colour XY Gradient (applied per-layer via 2D canvas) -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Colour XY Gradient</span>
+                        <button id="shGradToggle" onclick="toggleShader('grad')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <p class="text-zinc-500 text-xs mb-2">Tints pattern lines (layer-only)</p>
+                    <div class="grid grid-cols-2 gap-1 mb-2">
+                        <div><span class="text-xs text-zinc-400">Colour A</span><input type="color" id="gradColorA" value="#ff0080" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
+                        <div><span class="text-xs text-zinc-400">Colour B</span><input type="color" id="gradColorB" value="#0080ff" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
+                    </div>
+                    <div class="row"><span>Angle °</span><span id="val-gradAngle">45</span></div>
+                    <input type="range" id="gradAngle" min="0" max="360" value="45" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-gradOpacity">60</span></div>
+                    <input type="range" id="gradOpacity" min="0" max="100" value="60" class="w-full accent-violet-500">
+                </div>
+                <!-- Noise -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Perlin Noise</span>
+                        <button id="shNoiseToggle" onclick="toggleShader('noise')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="row"><span>Scale</span><span id="val-noiseScale">3</span></div>
+                    <input type="range" id="noiseScale" min="0.5" max="20" value="3" step="0.5" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Speed</span><span id="val-noiseSpeed">0.3</span></div>
+                    <input type="range" id="noiseSpeed" min="0" max="3" value="0.3" step="0.05" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-noiseOpacity">40</span></div>
+                    <input type="range" id="noiseOpacity" min="0" max="100" value="40" class="w-full accent-violet-500">
+                </div>
+                <!-- Colour Noise -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Colour Noise</span>
+                        <button id="shColorNoiseToggle" onclick="toggleShader('colorNoise')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="row"><span>Scale</span><span id="val-colorNoiseScale">5</span></div>
+                    <input type="range" id="colorNoiseScale" min="0.5" max="20" value="5" step="0.5" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Speed</span><span id="val-colorNoiseSpeed">0.5</span></div>
+                    <input type="range" id="colorNoiseSpeed" min="0" max="3" value="0.5" step="0.05" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Expand <span class="text-zinc-500 text-xs">(&lt;0 contract)</span></span><span id="val-colorNoiseExpand">0</span></div>
+                    <input type="range" id="colorNoiseExpand" min="-5" max="5" value="0" step="0.1" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-colorNoiseOpacity">50</span></div>
+                    <input type="range" id="colorNoiseOpacity" min="0" max="100" value="50" class="w-full accent-violet-500">
+                </div>
+                <!-- Time Blur -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Time Blur</span>
+                        <button id="shBlurToggle" onclick="toggleShader('blur')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="row"><span>Persistence</span><span id="val-blurPersist">0.85</span></div>
+                    <input type="range" id="blurPersist" min="0.5" max="0.99" value="0.85" step="0.01" class="w-full accent-violet-500">
+                </div>
+            </div>
+
+            <!-- Canvas -->
+            <div class="sep">
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Canvas</p>
+                    <button class="lock-btn" id="lock-canvas" onclick="toggleLock('canvas')" title="Lock Canvas from randomise">🔓</button>
+                </div>
+                <div class="row mb-1"><span class="text-xs text-zinc-400">Background</span></div>
+                <input type="color" id="bgColor" value="#000000" class="w-full h-9 rounded border border-zinc-700 mb-2">
+                <div class="row mb-1"><span class="text-xs text-zinc-400">Cutout</span></div>
+                <select id="cutout" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    <option value="none">None</option>
+                    <option value="circle" selected>Circle</option>
+                    <option value="square">Square</option>
+                    <option value="diamond">Diamond</option>
+                </select>
+            </div>
+
+            <!-- Lightbox Mode -->
+            <div class="sep">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="slabel mb-0">Lightbox Mode</p>
+                    <button id="lightboxToggle" onclick="toggleLightbox()" class="lightbox-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                </div>
+                <p class="text-zinc-500 text-xs mb-2">Laser-cut / 3D print guide overlay — circular disc with gear teeth ring + 3 planetary gears at 12 / 4 / 8 o'clock.</p>
+                <div id="lightboxControls" class="hidden space-y-2">
+                    <div class="row"><span>Disc Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbDiameter">200</span></div>
+                    <input type="range" id="lbDiameter" min="50" max="500" value="200" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Module <span class="text-zinc-500 text-xs">(tooth size mm)</span></span><span id="val-lbModule">8</span></div>
+                    <input type="range" id="lbModule" min="1" max="30" value="8" step="0.5" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Planet Teeth</span><span id="val-lbPlanetTeeth">16</span></div>
+                    <input type="range" id="lbPlanetTeeth" min="8" max="60" value="16" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Planet Gap <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbPlanetGap">0.5</span></div>
+                    <input type="range" id="lbPlanetGap" min="0" max="5" value="0.5" step="0.1" class="w-full accent-amber-500 mb-2">
+                    <div class="row"><span>Planet Axle Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbAxleHole">5</span></div>
+                    <input type="range" id="lbAxleHole" min="1" max="20" value="5" step="0.5" class="w-full accent-amber-500 mb-2">
+                    <div id="lbGearInfo" class="text-xs text-zinc-400 p-2 bg-zinc-900 rounded-lg leading-relaxed"></div>
+                    <div class="grid grid-cols-2 gap-1 mt-1">
+                        <button onclick="exportLightboxSVG(0)" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs font-semibold col-span-2">⬇ SVG All Layers</button>
+                        <button onclick="exportLightboxSVG(1)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L1</button>
+                        <button onclick="exportLightboxSVG(2)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L2</button>
+                        <button onclick="exportLightboxSVG(3)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L3</button>
+                        <button onclick="exportLightboxSVG(4)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG Planets</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-4 mt-3 grid grid-cols-2 gap-2">
+            <button onclick="openDownload()" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">⬇ Export</button>
+            <button onclick="togglePause()" id="pauseBtn" class="py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium">⏸ Pause</button>
+            <button onclick="saveState()" id="saveBtn" class="py-3 bg-blue-700 hover:bg-blue-600 rounded-xl text-sm font-medium">💾 Save</button>
+            <button onclick="loadState()" id="loadBtn" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">📂 Load</button>
+            <button onclick="openPopout()" id="popoutBtn" class="col-span-2 py-3 bg-indigo-700 hover:bg-indigo-600 rounded-xl text-sm font-medium">⧉ Pop-out to Second Monitor</button>
+        </div>
+    </div>
+
+    <!-- Canvas area -->
+    <div class="flex-1 flex items-center justify-center p-1 bg-zinc-950" id="canvasContainer">
+        <div id="canvasWrap">
+            <canvas id="canvas"></canvas>
+            <canvas id="shaderCanvas"></canvas>
+            <canvas id="meshCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Logo watermark -->
+<img src="milky-logo.png" alt="Milky" style="position:fixed;bottom:12px;right:12px;width:56px;height:auto;opacity:0.75;pointer-events:none;z-index:50;">
+
+<!-- ══ Download Modal ══════════════════════════════════════════════ -->
+<div id="dlModal" onclick="if(event.target===this)closeDownload()">
+    <div id="dlBox">
+        <h2 class="font-bold mb-1">Export</h2>
+        <p class="text-xs text-zinc-400 mb-4">Export a single layer (transparent BG) or the full composite.</p>
+        <div class="space-y-2">
+            <button onclick="exportLayer(0)"  class="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm">🖼 Composite PNG (all visible)</button>
+            <div class="border-t border-zinc-700 pt-2">
+                <p class="text-xs text-zinc-500 mb-1">Per-layer PNG (transparent)</p>
+                <div class="grid grid-cols-3 gap-1">
+                    <button onclick="exportLayer(1)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L1 PNG</button>
+                    <button onclick="exportLayer(2)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L2 PNG</button>
+                    <button onclick="exportLayer(3)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L3 PNG</button>
+                </div>
+            </div>
+            <div class="border-t border-zinc-700 pt-2">
+                <p class="text-xs text-zinc-500 mb-1">Per-layer SVG (vector)</p>
+                <div class="grid grid-cols-3 gap-1">
+                    <button onclick="exportSVG(1)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L1 SVG</button>
+                    <button onclick="exportSVG(2)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L2 SVG</button>
+                    <button onclick="exportSVG(3)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L3 SVG</button>
+                </div>
+            </div>
+        </div>
+        <button onclick="closeDownload()" class="mt-4 w-full py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm text-zinc-400">Cancel</button>
+    </div>
+</div>
+
+    <script>
+// ════════════════════════════════════════════════════════════════════
+//  Canvases
+// ════════════════════════════════════════════════════════════════════
+const canvas       = document.getElementById('canvas');
+const ctx          = canvas.getContext('2d', { alpha: false });
+const shaderCanvas = document.getElementById('shaderCanvas');
+const meshCanvas   = document.getElementById('meshCanvas');
+
+let animationFrame = null;
+let lastTime       = 0;
+let paused         = false;
+let popoutWin      = null;
+let popoutCanvas   = null;
+let warpPhase      = 0;
+let globalTime     = 0;
+
+// Per-layer accumulated rotation angles (degrees)
+const layerAngle = [0, 0, 0];
+
+// ════════════════════════════════════════════════════════════════════
+//  Params
+// ════════════════════════════════════════════════════════════════════
+const params = {
+    shape:         'lines',
+    blendMode:     'source-over',
+    blendStrength: 100,
+    cellCount:     26,
+    cellSize:      59,
+    cellSizeOscSpeed: 0,
+    cellSizeOscDepth: 0,
+    stroke:        5,
+    warpStrength:  80,
+    warpRadius:    100,
+    warpType:      'flag',
+    meshStrength:  100,
+    meshMode:      'fixed',
+    warpOscSpeed:  0,
+    warpRgbDrive:  0,
+    animateWarp:   false,
+    cutout:        'circle',
+    bgColor:       '#000000',
+    layer1Color: '#ffffff', layer1Speed:  7.9, layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
+    layer1Opacity: 100, layer1RgbShift: 0,
+    layer2Color: '#ffffff', layer2Speed:  4.0, layer2OffsetX: 0, layer2OffsetY: 0, layer2On: true,
+    layer2Opacity: 100, layer2RgbShift: 0,
+    layer3Color: '#ffffff', layer3Speed: -4.0, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: true,
+    layer3Opacity: 100, layer3RgbShift: 0,
+    warpLayers: [true, true, true],  // which layers warp applies to
+    // Shaders
+    shGrad:       false, gradColorA: '#ff0080', gradColorB: '#0080ff', gradAngle: 45,  gradOpacity: 60,
+    shNoise:      false, noiseScale: 3,  noiseSpeed: 0.3, noiseOpacity: 40,
+    shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseExpand: 0, colorNoiseOpacity: 50,
+    shBlur:       false, blurPersist: 0.85,
+    // Lightbox
+    lightbox: false, lbDiameter: 200, lbModule: 8, lbPlanetTeeth: 16,
+    lbPlanetGap: 0.5, lbCentreHole: 8, lbAxleHole: 5,
+};
+
+// ════════════════════════════════════════════════════════════════════
+//  Canvas resize
+// ════════════════════════════════════════════════════════════════════
+function resizeCanvas() {
+    const c    = document.getElementById('canvasContainer');
+    const size = Math.min(c.clientWidth * 0.99, c.clientHeight * 0.98);
+    [canvas, shaderCanvas, meshCanvas].forEach(cv => {
+        cv.width  = size;
+        cv.height = size;
+        cv.style.width  = size + 'px';
+        cv.style.height = size + 'px';
+    });
+    initMeshKnobs();
+    initWebGL();
+    if (paused) renderFrame(lastTime);
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ════════════════════════════════════════════════════════════════════
+//  Control wiring
+// ════════════════════════════════════════════════════════════════════
+// Log-scale helpers for rotation speed sliders (raw -100..100 → actual °/s)
+const SPEED_LOG_MAX = 180;
+function sliderToSpeed(s) {
+    const sign = s < 0 ? -1 : s > 0 ? 1 : 0;
+    return sign * (Math.exp(Math.abs(s) / 100 * Math.log(SPEED_LOG_MAX + 1)) - 1);
+}
+function speedToSlider(v) {
+    const sign = v < 0 ? -1 : v > 0 ? 1 : 0;
+    return sign * (Math.log(Math.abs(v) + 1) / Math.log(SPEED_LOG_MAX + 1)) * 100;
+}
+function fmtSpeed(v) {
+    return Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString();
+}
+const speedIds = new Set(['layer1Speed','layer2Speed','layer3Speed']);
+
+const numericIds = new Set([
+    'cellCount','cellSize','cellSizeOscSpeed','cellSizeOscDepth','stroke','blendStrength',
+    'warpStrength','warpRadius','warpOscSpeed','warpRgbDrive','meshStrength',
+    'layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
+    'layer2OffsetX','layer2OffsetY','layer2Opacity','layer2RgbShift',
+    'layer3OffsetX','layer3OffsetY','layer3Opacity','layer3RgbShift',
+    'gradAngle','gradOpacity',
+    'noiseScale','noiseSpeed','noiseOpacity',
+    'colorNoiseScale','colorNoiseSpeed','colorNoiseExpand','colorNoiseOpacity',
+    'blurPersist',
+    'lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbCentreHole','lbAxleHole',
+]);
+const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode']);
+const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color',
+                            'gradColorA','gradColorB']);
+
+document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(el => {
+    el.addEventListener('input', () => {
+        const id = el.id;
+        if      (colorIds.has(id))   params[id] = el.value;
+        else if (selectIds.has(id))  params[id] = el.value;
+        else if (speedIds.has(id)) {
+            params[id] = sliderToSpeed(+el.value);
+            const vEl = document.getElementById('val-' + id);
+            if (vEl) vEl.textContent = fmtSpeed(params[id]);
+        } else if (numericIds.has(id)) params[id] = +el.value;
+        if (!speedIds.has(id)) {
+            const valEl = document.getElementById('val-' + id);
+            if (valEl && el.type === 'range') valEl.textContent = parseFloat(el.value).toFixed(el.step && parseFloat(el.step) < 1 ? 2 : 0);
+        }
+        if (paused) renderFrame(lastTime);
+    });
+});
+
+document.getElementById('animateWarp').addEventListener('change', e => { params.animateWarp = e.target.checked; });
+document.getElementById('warpType').addEventListener('change', e => {
+    const isMesh = e.target.value === 'mesh';
+    document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+    meshCanvas.style.pointerEvents = (isMesh && meshEditMode) ? 'auto' : 'none';
+    params.warpType = e.target.value;
+});
+document.getElementById('meshMode').addEventListener('change', e => { params.meshMode = e.target.value; });
+document.getElementById('shape').addEventListener('change', e => {
+    document.getElementById('svgImportUI').classList.toggle('hidden', e.target.value !== 'svg-import');
+});
+document.getElementById('svgFileInput').addEventListener('change', e => {
+    if (e.target.files[0]) loadSVGFile(e.target.files[0]);
+});
+
+// ════════════════════════════════════════════════════════════════════
+//  Layer toggles
+// ════════════════════════════════════════════════════════════════════
+function toggleLayer(n) {
+    const key = 'layer' + n + 'On';
+    params[key] = !params[key];
+    const btn = document.getElementById('layer' + n + 'Toggle');
+    btn.textContent = params[key] ? 'ON' : 'OFF';
+    btn.classList.toggle('layer-on',  params[key]);
+    btn.classList.toggle('layer-off', !params[key]);
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Warp layer select
+// ════════════════════════════════════════════════════════════════════
+function _syncWarpBtn(n) {
+    const on  = params.warpLayers[n-1];
+    const wb  = document.getElementById('warpL'+n+'Btn');
+    wb.classList.toggle('warp-layer-on',  on);
+    wb.classList.toggle('warp-layer-off', !on);
+    const lpb = document.getElementById('layerWarp'+n+'Btn');
+    if (lpb) { lpb.classList.toggle('layer-warp-on', on); lpb.classList.toggle('layer-warp-off', !on); }
+}
+
+function toggleWarpLayer(n) {
+    params.warpLayers[n-1] = !params.warpLayers[n-1];
+    _syncWarpBtn(n);
+    if (paused) renderFrame(lastTime);
+}
+
+function toggleLayerWarp(n) {
+    params.warpLayers[n-1] = !params.warpLayers[n-1];
+    _syncWarpBtn(n);
+    if (paused) renderFrame(lastTime);
+}
+
+function flipLayerSpeed(n) {
+    params['layer'+n+'Speed'] = -(params['layer'+n+'Speed']);
+    const el = document.getElementById('layer'+n+'Speed');
+    if (el) el.value = speedToSlider(params['layer'+n+'Speed']);
+    const vEl = document.getElementById('val-layer'+n+'Speed');
+    if (vEl) vEl.textContent = fmtSpeed(params['layer'+n+'Speed']);
+    if (paused) renderFrame(lastTime);
+}
+
+function invertWarpLayers() {
+    params.warpLayers = params.warpLayers.map(v => !v);
+    [1, 2, 3].forEach(n => _syncWarpBtn(n));
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Shader toggles
+// ════════════════════════════════════════════════════════════════════
+const shaderKeys = { grad:'shGrad', noise:'shNoise', colorNoise:'shColorNoise', blur:'shBlur' };
+function toggleShader(id) {
+    const key = shaderKeys[id];
+    params[key] = !params[key];
+    const btn = document.getElementById('sh' + id.charAt(0).toUpperCase() + id.slice(1) + 'Toggle');
+    btn.textContent = params[key] ? 'ON' : 'OFF';
+    btn.classList.toggle('shader-on',  params[key]);
+    btn.classList.toggle('shader-off', !params[key]);
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Pause / Resume
+// ════════════════════════════════════════════════════════════════════
+function togglePause() {
+    paused = !paused;
+    document.getElementById('pauseBtn').textContent = paused ? '▶ Resume' : '⏸ Pause';
+    if (!paused) { lastTime = 0; animationFrame = requestAnimationFrame(renderFrame); }
+    else if (animationFrame) cancelAnimationFrame(animationFrame);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Pop-out window (mirrors canvas — move to 2nd monitor, go fullscreen)
+// ════════════════════════════════════════════════════════════════════
+function openPopout() {
+    if (popoutWin && !popoutWin.closed) { popoutWin.focus(); return; }
+
+    popoutWin = window.open('', 'moirePopout',
+        'width=800,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes');
+    if (!popoutWin) {
+        alert('Pop-up blocked! Please allow pop-ups for this page.');
+        return;
+    }
+
+    popoutWin.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Moiré — Pop-out</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; background:#000; display:flex;
+               align-items:center; justify-content:center; overflow:hidden; }
+  canvas { display:block; width:100%; height:100%; object-fit:contain; }
+  #fsBtn {
+    position:fixed; top:8px; right:8px; z-index:99;
+    background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.25);
+    border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer;
+    transition:background 0.15s;
+  }
+  #fsBtn:hover { background:rgba(255,255,255,0.15); }
+</style>
+</head><body>
+<canvas id="pc"></canvas>
+<button id="fsBtn" onclick="toggleFS()">&#x26F6; Fullscreen</button>
+<script>
+  function toggleFS() {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().catch(()=>{});
+    } else {
+      document.exitFullscreen();
+    }
+  }
+  document.addEventListener('fullscreenchange', () => {
+    document.getElementById('fsBtn').textContent =
+      document.fullscreenElement ? '\u2715 Exit Fullscreen' : '\u26F6 Fullscreen';
+  });
+  window.addEventListener('resize', () => {
+    if (window._fitCb) window._fitCb();
+  });
+<\/script>
+</body></html>`);
+    popoutWin.document.close();
+
+    // Wait for the pop-out DOM to be ready, then grab the canvas
+    popoutWin.addEventListener('load', () => {
+        popoutCanvas = popoutWin.document.getElementById('pc');
+        fitPopoutCanvas();
+        // Kick off mirroring if paused (live mirror happens in renderFrame)
+        if (paused) renderFrame(lastTime);
+    });
+
+    popoutWin.addEventListener('resize', fitPopoutCanvas);
+    popoutWin.addEventListener('unload', () => {
+        popoutCanvas = null;
+        popoutWin    = null;
+    });
+    // Expose the fit callback to the child window
+    const self = this;
+    popoutWin._fitCb = fitPopoutCanvas;
+}
+
+function fitPopoutCanvas() {
+    if (!popoutWin || !popoutCanvas) return;
+    const w = popoutWin.innerWidth;
+    const h = popoutWin.innerHeight;
+    popoutCanvas.width  = canvas.width;
+    popoutCanvas.height = canvas.height;
+    popoutCanvas.style.width  = w + 'px';
+    popoutCanvas.style.height = h + 'px';
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Randomise section locks
+// ════════════════════════════════════════════════════════════════════
+const locks = { pattern: false, grid: false, warp: false, layers: false, canvas: false };
+function toggleLock(section) {
+    locks[section] = !locks[section];
+    const btn = document.getElementById('lock-' + section);
+    btn.textContent = locks[section] ? '🔒' : '🔓';
+    btn.classList.toggle('locked', locks[section]);
+}
+function resetLocks() {
+    Object.keys(locks).forEach(k => {
+        locks[k] = false;
+        const btn = document.getElementById('lock-' + k);
+        if (btn) { btn.textContent = '🔓'; btn.classList.remove('locked'); }
+    });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Randomise
+// ════════════════════════════════════════════════════════════════════
+function randomise() {
+    function rnd(min, max, step) {
+        if (step) {
+            const steps = Math.round((max - min) / step);
+            return min + Math.round(Math.random() * steps) * step;
+        }
+        return min + Math.random() * (max - min);
+    }
+    function rndInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function rndColor() {
+        const h = rndInt(0, 360), s = rndInt(40, 100), l = rndInt(40, 90);
+        return `hsl(${h},${s}%,${l}%)`;
+    }
+    function hslToHex(hsl) {
+        // Convert e.g. "hsl(200,80%,60%)" → #rrggbb
+        const m = hsl.match(/(\d+),(\d+)%,(\d+)%/);
+        const h = +m[1]/360, s = +m[2]/100, l = +m[3]/100;
+        let r, g, b;
+        if (s === 0) { r = g = b = l; } else {
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1; if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q-p)*6*t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+                return p;
+            };
+            const q = l < 0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+            r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
+        }
+        return '#' + [r,g,b].map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('');
+    }
+
+    const shapes = ['lines','radial','iso-circles','iso-dots','grid','hexagon','hex-tile','triangle'];
+    const blends = ['source-over','difference','xor','screen','overlay','multiply','exclusion','color-dodge','hard-light'];
+    const warps  = ['none','flag','sine','ripple'];
+    const cutouts = ['none','circle','square','diamond'];
+
+    // ── Randomise params ──
+    if (!locks.pattern) {
+        params.shape     = shapes[rndInt(0, shapes.length-1)];
+        params.blendMode = blends[rndInt(0, blends.length-1)];
+        params.blendStrength = rndInt(60, 100);
+    }
+    if (!locks.grid) {
+        params.cellCount = rndInt(10, 80);
+        params.cellSize  = rndInt(10, 90);
+        params.stroke    = rnd(1, 12, 0.5);
+    }
+    if (!locks.canvas) {
+        params.cutout  = cutouts[rndInt(0, cutouts.length-1)];
+        params.bgColor = hslToHex(rndColor());
+    }
+
+    // Layers — randomise all three, all ON
+    if (!locks.layers) {
+        for (let i = 1; i <= 3; i++) {
+            params['layer'+i+'Color']    = hslToHex(rndColor());
+            params['layer'+i+'Speed']    = rnd(-120, 120, 1);
+            params['layer'+i+'OffsetX']  = rndInt(-80, 80);
+            params['layer'+i+'OffsetY']  = rndInt(-80, 80);
+            params['layer'+i+'Opacity']  = rndInt(60, 100);
+            params['layer'+i+'RgbShift'] = rnd(0, 15, 0.5);
+            params['layer'+i+'On']       = true;
+            const btn = document.getElementById('layer'+i+'Toggle');
+            btn.textContent = 'ON';
+            btn.classList.add('layer-on'); btn.classList.remove('layer-off');
+        }
+    }
+
+    // Warp
+    if (!locks.warp) {
+        params.warpType     = warps[rndInt(0, warps.length-1)];
+        params.warpStrength = rndInt(5, 60);
+        params.warpRadius   = rndInt(20, 90);
+        params.warpOscSpeed = rnd(0, 2, 0.1);
+        params.warpRgbDrive = rnd(0, 2, 0.05);
+        params.warpLayers   = [Math.random()>0.3, Math.random()>0.3, Math.random()>0.3]
+                               .map((v,i,a) => a.every(x=>!x) ? true : v);
+    }
+
+    // Shaders — always OFF
+    params.shGrad = false; params.shNoise = false;
+    params.shColorNoise = false; params.shBlur = false;
+
+    // ── Sync all HTML controls ──
+    function setSlider(id, val) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = val;
+        const vEl = document.getElementById('val-'+id);
+        if (vEl) vEl.textContent = parseFloat(val).toFixed(el.step && parseFloat(el.step) < 1 ? 2 : 0);
+    }
+    function setSelect(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+    function setColor(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+
+    if (!locks.pattern) {
+        setSelect('shape',     params.shape);
+        setSelect('blendMode', params.blendMode);
+        setSlider('blendStrength', params.blendStrength);
+    }
+    if (!locks.grid) {
+        setSlider('cellCount', params.cellCount);
+        setSlider('cellSize',  params.cellSize);
+        setSlider('stroke',    params.stroke);
+    }
+    if (!locks.canvas) {
+        setSelect('cutout',  params.cutout);
+        setColor('bgColor',  params.bgColor);
+    }
+
+    if (!locks.layers) {
+        for (let i = 1; i <= 3; i++) {
+            setColor('layer'+i+'Color',    params['layer'+i+'Color']);
+            // Speed slider uses log mapping — set raw slider position + display actual value
+            const spEl = document.getElementById('layer'+i+'Speed');
+            if (spEl) { spEl.value = speedToSlider(params['layer'+i+'Speed']); }
+            const spVEl = document.getElementById('val-layer'+i+'Speed');
+            if (spVEl) spVEl.textContent = fmtSpeed(params['layer'+i+'Speed']);
+            setSlider('layer'+i+'OffsetX', params['layer'+i+'OffsetX']);
+            setSlider('layer'+i+'OffsetY', params['layer'+i+'OffsetY']);
+            setSlider('layer'+i+'Opacity', params['layer'+i+'Opacity']);
+            setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+            _syncWarpBtn(i);
+        }
+    }
+
+    if (!locks.warp) {
+        setSelect('warpType',    params.warpType);
+        setSlider('warpStrength', params.warpStrength);
+        setSlider('warpRadius',   params.warpRadius);
+        setSlider('warpOscSpeed', params.warpOscSpeed);
+        setSlider('warpRgbDrive', params.warpRgbDrive);
+
+        // Warp layer buttons
+        [1,2,3].forEach(n => {
+            const btn = document.getElementById('warpL'+n+'Btn');
+            btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
+            btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
+        });
+
+        // Warp type toggle (mesh vs global controls)
+        const isMesh = params.warpType === 'mesh';
+        document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+        document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+    }
+
+    // Shader buttons — all OFF
+    ['Grad','Noise','ColorNoise','Blur'].forEach(id => {
+        const btn = document.getElementById('sh'+id+'Toggle');
+        if (btn) { btn.textContent = 'OFF'; btn.classList.remove('shader-on'); btn.classList.add('shader-off'); }
+    });
+
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  ── MESH WARP ───────────────────────────────────────────────────
+//  4×4 grid of bicubic-like control points.
+//  Each point stores { x, y } in canvas UV space [0..1].
+//  Neutral = uniform grid. User drags to deform.
+// ════════════════════════════════════════════════════════════════════
+const MESH_ROWS = 4, MESH_COLS = 4;
+let meshPoints = [];   // [row][col] = {x, y}  (0..1 UV)
+let meshEditMode = false;
+let draggingPoint = null;
+
+function resetMesh() {
+    meshPoints = [];
+    for (let r = 0; r < MESH_ROWS; r++) {
+        meshPoints.push([]);
+        for (let c = 0; c < MESH_COLS; c++) {
+            meshPoints[r].push({ x: c / (MESH_COLS-1), y: r / (MESH_ROWS-1) });
+        }
+    }
+    updateMeshKnobs();
+    if (paused) renderFrame(lastTime);
+}
+
+function toggleMeshEdit() {
+    meshEditMode = !meshEditMode;
+    const btn = document.getElementById('meshEditBtn');
+    btn.textContent    = meshEditMode ? '✔ Done' : '✎ Edit';
+    btn.className      = meshEditMode
+        ? 'py-1 bg-amber-500 hover:bg-amber-400 rounded text-xs'
+        : 'py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs';
+    meshCanvas.style.pointerEvents = meshEditMode ? 'auto' : 'none';
+    updateMeshKnobs();
+}
+
+// ── Catmull-Rom scalar interpolation ───────────────────────────
+function catmullRom1D(p0, p1, p2, p3, t) {
+    return 0.5 * (
+        2*p1 +
+        (p2 - p0) * t +
+        (2*p0 - 5*p1 + 4*p2 - p3) * t*t +
+        (3*p1 - p0 - 3*p2 + p3) * t*t*t
+    );
+}
+
+// Map a canvas pixel coordinate [0..size] → mesh-displaced coordinate
+// Bicubic Catmull-Rom interpolation for smooth deformation.
+// Returns {dx, dy} offset to add to the canvas pixel.
+function meshDisplace(px, py, layerRot) {
+    if (params.warpType !== 'mesh' || meshPoints.length === 0) return {dx:0, dy:0};
+    const W = canvas.width, H = canvas.height;
+    const strength = params.meshStrength / 100;
+
+    let u = px / W, v = py / H;
+    if (params.meshMode === 'layer' && layerRot !== 0) {
+        const cx = 0.5, cy = 0.5;
+        const rad = -layerRot * Math.PI / 180;
+        const du = u - cx, dv = v - cy;
+        u = cx + du * Math.cos(rad) - dv * Math.sin(rad);
+        v = cy + du * Math.sin(rad) + dv * Math.cos(rad);
+    }
+
+    // Grid coords
+    const gu  = Math.max(0, Math.min(MESH_COLS-1, u * (MESH_COLS-1)));
+    const gv  = Math.max(0, Math.min(MESH_ROWS-1, v * (MESH_ROWS-1)));
+    const col = Math.min(MESH_COLS-2, Math.floor(gu));
+    const row = Math.min(MESH_ROWS-2, Math.floor(gv));
+    const tu  = gu - col;
+    const tv  = gv - row;
+
+    // Catmull-Rom bicubic: 4 row passes along U, then 1 pass along V
+    const rowRes = [];
+    for (let ri = -1; ri <= 2; ri++) {
+        const r  = Math.max(0, Math.min(MESH_ROWS-1, row + ri));
+        const pts = meshPoints[r];
+        const c0 = Math.max(0, Math.min(MESH_COLS-1, col - 1));
+        const c1 = Math.max(0, Math.min(MESH_COLS-1, col));
+        const c2 = Math.max(0, Math.min(MESH_COLS-1, col + 1));
+        const c3 = Math.max(0, Math.min(MESH_COLS-1, col + 2));
+        rowRes.push({
+            x: catmullRom1D(pts[c0].x, pts[c1].x, pts[c2].x, pts[c3].x, tu),
+            y: catmullRom1D(pts[c0].y, pts[c1].y, pts[c2].y, pts[c3].y, tu),
+        });
+    }
+    const ix = catmullRom1D(rowRes[0].x, rowRes[1].x, rowRes[2].x, rowRes[3].x, tv);
+    const iy = catmullRom1D(rowRes[0].y, rowRes[1].y, rowRes[2].y, rowRes[3].y, tv);
+
+    return {
+        dx: (ix - u) * W * strength,
+        dy: (iy - v) * H * strength
+    };
+}
+
+// ── Mesh knob DOM elements ───────────────────────────────────────
+let knobEls = [];
+function initMeshKnobs() {
+    knobEls.forEach(k => k.remove());
+    knobEls = [];
+    const wrap = document.getElementById('canvasWrap');
+    for (let r = 0; r < MESH_ROWS; r++) {
+        knobEls.push([]);
+        for (let c = 0; c < MESH_COLS; c++) {
+            const el = document.createElement('div');
+            el.className = 'cp-knob';
+            el.style.display = 'none';
+            el.dataset.row = r;
+            el.dataset.col = c;
+            wrap.appendChild(el);
+            knobEls[r].push(el);
+            // Pointer events
+            el.addEventListener('pointerdown', e => {
+                e.preventDefault();
+                draggingPoint = { r, c };
+                el.setPointerCapture(e.pointerId);
+            });
+        }
+    }
+    resetMesh();
+}
+
+function updateMeshKnobs() {
+    const show = meshEditMode && params.warpType === 'mesh';
+    for (let r = 0; r < MESH_ROWS; r++) {
+        for (let c = 0; c < MESH_COLS; c++) {
+            const el = knobEls[r][c];
+            el.style.display = show ? 'block' : 'none';
+            if (show) {
+                const pt = meshPoints[r][c];
+                el.style.left = (pt.x * canvas.width)  + 'px';
+                el.style.top  = (pt.y * canvas.height) + 'px';
+            }
+        }
+    }
+    // Draw mesh lines on meshCanvas
+    drawMeshOverlay();
+}
+
+function drawMeshOverlay() {
+    const mc = meshCanvas.getContext('2d');
+    mc.clearRect(0, 0, meshCanvas.width, meshCanvas.height);
+    if (!meshEditMode || params.warpType !== 'mesh') return;
+    mc.strokeStyle = 'rgba(251,191,36,0.55)';
+    mc.lineWidth   = 1.5;
+    const W = canvas.width, H = canvas.height;
+
+    // Draw a Catmull-Rom curve through an array of {x,y} UV points
+    function crCurve(pts) {
+        mc.beginPath();
+        mc.moveTo(pts[0].x * W, pts[0].y * H);
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p0 = pts[Math.max(0, i - 1)];
+            const p1 = pts[i];
+            const p2 = pts[i + 1];
+            const p3 = pts[Math.min(pts.length - 1, i + 2)];
+            mc.bezierCurveTo(
+                (p1.x + (p2.x - p0.x) / 6) * W, (p1.y + (p2.y - p0.y) / 6) * H,
+                (p2.x - (p3.x - p1.x) / 6) * W, (p2.y - (p3.y - p1.y) / 6) * H,
+                p2.x * W, p2.y * H
+            );
+        }
+        mc.stroke();
+    }
+
+    // Rows
+    for (let r = 0; r < MESH_ROWS; r++) crCurve(meshPoints[r]);
+    // Columns
+    for (let c = 0; c < MESH_COLS; c++) crCurve(meshPoints.map(row => row[c]));
+}
+
+// Pointer move/up on meshCanvas
+meshCanvas.addEventListener('pointermove', e => {
+    if (!draggingPoint) return;
+    const rect = meshCanvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX / canvas.width;
+    const y = (e.clientY - rect.top)  * scaleY / canvas.height;
+    meshPoints[draggingPoint.r][draggingPoint.c].x = Math.max(0, Math.min(1, x));
+    meshPoints[draggingPoint.r][draggingPoint.c].y = Math.max(0, Math.min(1, y));
+    updateMeshKnobs();
+    if (paused) renderFrame(lastTime);
+});
+meshCanvas.addEventListener('pointerup',   () => { draggingPoint = null; });
+meshCanvas.addEventListener('pointerleave',() => { draggingPoint = null; });
+
+// ════════════════════════════════════════════════════════════════════
+//  ── WebGL SHADER CANVAS ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+let gl = null, shaderProg = null, shaderBuf = null;
+// Time-blur accumulation: we render to a texture, blend with previous frame
+let blurFBO = null, blurTex = [null, null], blurPingPong = 0;
+
+const VERT_SRC = `
+attribute vec2 a_pos;
+varying   vec2 v_uv;
+void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }
+`;
+
+// Simplex-like noise from hash
+const NOISE_GLSL = `
+vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec2 mod289v(vec2 x){return x-floor(x*(1./289.))*289.;}
+vec3 permute(vec3 x){return mod289((x*34.+1.)*x);}
+float snoise(vec2 v){
+    const vec4 C=vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
+    vec2 i=floor(v+dot(v,C.yy)),x0=v-i+dot(i,C.xx);
+    vec2 i1=(x0.x>x0.y)?vec2(1.,0.):vec2(0.,1.);
+    vec4 x12=x0.xyxy+C.xxzz; x12.xy-=i1;
+    i=mod289v(i);
+    vec3 p=permute(permute(i.y+vec3(0.,i1.y,1.))+i.x+vec3(0.,i1.x,1.));
+    vec3 m=max(0.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.);
+    m=m*m; m=m*m;
+    vec3 x2=fract(p*C.www)*2.-1.;
+    vec3 h=abs(x2)-.5;
+    vec3 ox=floor(x2+.5);
+    vec3 a0=x2-ox;
+    m*=1.79284291400159-.85373472095314*(a0*a0+h*h);
+    vec3 g; g.x=a0.x*x0.x+h.x*x0.y; g.yz=a0.yz*x12.xz+h.yz*x12.yw;
+    return 130.*dot(m,g);
+}
+`;
+
+const FRAG_SRC = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_time;
+uniform vec2  u_res;
+
+// ── Noise ──
+uniform bool  u_noiseOn;
+uniform float u_noiseScale, u_noiseSpeed, u_noiseOpacity;
+
+// ── Colour Noise ──
+uniform bool  u_colorNoiseOn;
+uniform float u_cnScale, u_cnSpeed, u_cnExpand, u_cnOpacity;
+
+${NOISE_GLSL}
+
+vec3 hexToRgb(vec3 c){ return c; }
+
+void main(){
+    vec4 out_col = vec4(0.0);
+
+    // ── Perlin Noise (monochrome overlay) ──
+    if(u_noiseOn){
+        float n = snoise(v_uv * u_noiseScale + u_noiseSpeed * u_time);
+        n = n * 0.5 + 0.5;
+        vec3 nc = vec3(n);
+        float a = u_noiseOpacity / 100.0;
+        out_col.rgb = mix(out_col.rgb, nc, a);
+        out_col.a   = max(out_col.a, a * n);
+    }
+
+    // ── Colour Noise (expand/contract from centre, RGB shift) ──
+    if(u_colorNoiseOn){
+        // Radial expand/contract: scale UV about centre
+        vec2 cuv = v_uv - 0.5;
+        float dist = length(cuv);
+        float zoom = 1.0 + u_cnExpand * dist;  // expand>0 pushes out, <0 pulls in
+        vec2 uv2 = (cuv / max(zoom, 0.01) + 0.5) * u_cnScale;
+        float t  = u_cnSpeed * u_time;
+        float r  = snoise(uv2 + vec2(0.0, t)) * 0.5 + 0.5;
+        float g  = snoise(uv2 + vec2(3.3, t + 1.1)) * 0.5 + 0.5;
+        float b  = snoise(uv2 + vec2(6.6, t + 2.2)) * 0.5 + 0.5;
+        // Warm the red channel a bit for a red-dominant look
+        r = clamp(r * 1.3, 0.0, 1.0);
+        b = clamp(b * 0.7, 0.0, 1.0);
+        vec3  cnc = vec3(r,g,b);
+        float a   = u_cnOpacity / 100.0;
+        out_col.rgb = mix(out_col.rgb, cnc, a);
+        out_col.a   = max(out_col.a, a);
+    }
+
+        gl_FragColor = out_col;
+}
+`;
+
+// Time-blur blend shader: mix previous accumulated frame with new shading
+const BLUR_FRAG_SRC = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_prev;
+uniform sampler2D u_curr;
+uniform float u_persist;
+void main(){
+    vec4 prev = texture2D(u_prev, v_uv);
+    vec4 curr = texture2D(u_curr, v_uv);
+    gl_FragColor = mix(curr, prev, u_persist);
+}
+`;
+
+function compileShader(src, type) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+        console.warn('Shader compile error:', gl.getShaderInfoLog(s));
+    return s;
+}
+
+function makeProgram(vsrc, fsrc) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compileShader(vsrc, gl.VERTEX_SHADER));
+    gl.attachShader(p, compileShader(fsrc, gl.FRAGMENT_SHADER));
+    gl.linkProgram(p);
+    return p;
+}
+
+function initWebGL() {
+    gl = shaderCanvas.getContext('webgl', { alpha:true, premultipliedAlpha:false });
+    if (!gl) { console.warn('WebGL not available'); return; }
+
+    shaderProg = makeProgram(VERT_SRC, FRAG_SRC);
+
+    // Full-screen quad
+    shaderBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, shaderBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+    // Two ping-pong textures + an FBO for time-blur accumulation
+    blurFBO = gl.createFramebuffer();
+    blurProg = makeProgram(VERT_SRC, BLUR_FRAG_SRC);
+    for (let i = 0; i < 2; i++) {
+        blurTex[i] = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, blurTex[i]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
+            shaderCanvas.width, shaderCanvas.height,
+            0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+}
+
+let blurProg = null;
+
+function hexToRgb01(hex) {
+    const r = parseInt(hex.slice(1,3),16)/255;
+    const g = parseInt(hex.slice(3,5),16)/255;
+    const b = parseInt(hex.slice(5,7),16)/255;
+    return [r,g,b];
+}
+
+function drawShaders(time) {
+    if (!gl || !shaderProg) return;
+    const anyOn = params.shNoise || params.shColorNoise || params.shBlur;
+    if (!anyOn) {
+        // Clear the shader canvas
+        gl.viewport(0, 0, shaderCanvas.width, shaderCanvas.height);
+        gl.clearColor(0,0,0,0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        return;
+    }
+
+    const W = shaderCanvas.width, H = shaderCanvas.height;
+    gl.viewport(0, 0, W, H);
+
+    function setFullQuad(prog) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, shaderBuf);
+        const loc = gl.getAttribLocation(prog, 'a_pos');
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    }
+
+    function u1f(prog, name, v){ gl.uniform1f(gl.getUniformLocation(prog, name), v); }
+    function u1i(prog, name, v){ gl.uniform1i(gl.getUniformLocation(prog, name), v); }
+    function u2f(prog, name, a,b){ gl.uniform2f(gl.getUniformLocation(prog, name), a, b); }
+    function u3f(prog, name, arr){ gl.uniform3fv(gl.getUniformLocation(prog, name), arr); }
+
+    if (params.shBlur && blurProg) {
+        // Render shader to ping-pong[blurPingPong] FBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blurTex[blurPingPong], 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+    } else {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    // Draw shader effects
+    gl.useProgram(shaderProg);
+    setFullQuad(shaderProg);
+    gl.clearColor(0,0,0,0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    u1f(shaderProg, 'u_time', time);
+    u2f(shaderProg, 'u_res', W, H);
+    // Noise
+    u1i(shaderProg, 'u_noiseOn', params.shNoise ? 1 : 0);
+    u1f(shaderProg, 'u_noiseScale', params.noiseScale);
+    u1f(shaderProg, 'u_noiseSpeed', params.noiseSpeed);
+    u1f(shaderProg, 'u_noiseOpacity', params.noiseOpacity);
+    // Colour Noise
+    u1i(shaderProg, 'u_colorNoiseOn', params.shColorNoise ? 1 : 0);
+    u1f(shaderProg, 'u_cnScale', params.colorNoiseScale);
+    u1f(shaderProg, 'u_cnSpeed', params.colorNoiseSpeed);
+    u1f(shaderProg, 'u_cnExpand', params.colorNoiseExpand);
+    u1f(shaderProg, 'u_cnOpacity', params.colorNoiseOpacity);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // Time blur: blend with previous frame
+    if (params.shBlur && blurProg) {
+        const next = 1 - blurPingPong;
+        // Read current FBO result (blurTex[blurPingPong]) and old (blurTex[next]),
+        // blend to output canvas
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.useProgram(blurProg);
+        setFullQuad(blurProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, blurTex[next]);           // previous accumulated
+        gl.uniform1i(gl.getUniformLocation(blurProg,'u_prev'), 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, blurTex[blurPingPong]);   // current frame
+        gl.uniform1i(gl.getUniformLocation(blurProg,'u_curr'), 1);
+        u1f(blurProg, 'u_persist', params.blurPersist);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        blurPingPong = next;
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Main render loop
+// ════════════════════════════════════════════════════════════════════
+function renderFrame(time = 0) {
+    if (!lastTime) lastTime = time;
+    const delta = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+
+    if (!paused) {
+        globalTime += delta;
+        layerAngle[0] = (layerAngle[0] + params.layer1Speed * delta) % 360;
+        layerAngle[1] = (layerAngle[1] + params.layer2Speed * delta) % 360;
+        layerAngle[2] = (layerAngle[2] + params.layer3Speed * delta) % 360;
+        if (params.animateWarp) warpPhase += delta;
+    }
+
+    // ── 2D pattern canvas ──
+    ctx.fillStyle = params.bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let clipped;
+    if (params.lightbox) {
+        // Clip the moiré pattern to the ring gear pitch circle so the
+        // gear teeth sit exactly on the edge of the visible disc.
+        const _g = lbCalcGear();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(_g.cx, _g.cy, _g.Rpitch_ring_px, 0, Math.PI * 2);
+        ctx.clip();
+        clipped = true;
+    } else {
+        clipped = applyClip(ctx);
+    }
+
+    if (params.layer1On) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = params.layer1Opacity / 100;
+        renderLayerOn(ctx, layerAngle[0], params.layer1OffsetX, params.layer1OffsetY, params.layer1Color, 0);
+    }
+    const blendAlpha = params.blendStrength / 100;
+    if (params.layer2On) {
+        ctx.globalCompositeOperation = params.blendMode;
+        ctx.globalAlpha = blendAlpha * (params.layer2Opacity / 100);
+        renderLayerOn(ctx, layerAngle[1], params.layer2OffsetX, params.layer2OffsetY, params.layer2Color, 1);
+    }
+    if (params.layer3On) {
+        ctx.globalCompositeOperation = params.blendMode;
+        ctx.globalAlpha = blendAlpha * (params.layer3Opacity / 100);
+        renderLayerOn(ctx, layerAngle[2], params.layer3OffsetX, params.layer3OffsetY, params.layer3Color, 2);
+    }
+
+    // ── WebGL shader overlay (composited inside the same clip region) ──
+    drawShaders(globalTime);
+    if (params.shNoise || params.shColorNoise || params.shBlur) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.drawImage(shaderCanvas, 0, 0);
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    if (clipped) ctx.restore();
+
+    // Lightbox gear overlay (drawn outside the clip region so teeth are visible)
+    if (params.lightbox) drawLightboxOverlay();
+
+    // Mirror to pop-out window if open
+    if (popoutWin && !popoutWin.closed && popoutCanvas) {
+        const pctx = popoutCanvas.getContext('2d');
+        pctx.drawImage(canvas, 0, 0, popoutCanvas.width, popoutCanvas.height);
+    }
+
+    if (!paused) animationFrame = requestAnimationFrame(renderFrame);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Cutout clip
+// ════════════════════════════════════════════════════════════════════
+function applyClip(c) {
+    if (params.cutout === 'none') return false;
+    const cx = canvas.width/2, cy = canvas.height/2;
+    const r  = Math.min(canvas.width, canvas.height) / 2 * 0.85;
+    c.save(); c.beginPath();
+    if      (params.cutout === 'circle')  c.arc(cx, cy, r, 0, Math.PI*2);
+    else if (params.cutout === 'square') { const s = r*1.4; c.rect(cx-s/2, cy-s/2, s, s); }
+    else if (params.cutout === 'diamond') {
+        c.moveTo(cx, cy-r); c.lineTo(cx+r, cy);
+        c.lineTo(cx, cy+r); c.lineTo(cx-r, cy); c.closePath();
+    }
+    c.clip(); return true;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Render one layer — with optional mesh warp applied point-by-point
+//  via an offscreen canvas pixel-displacement trick for closed shapes,
+//  or by warping each line segment's endpoint for line-based shapes.
+// ════════════════════════════════════════════════════════════════════
+// Build a CSS gradient string (matching gradColorA→gradColorB at gradAngle) for strokeStyle
+function gradientForLayer(c, angle, offX, offY) {
+    if (!params.shGrad) return null;
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2 + offX, cy = H/2 + offY;
+    const rad = params.gradAngle * Math.PI / 180;
+    const len = Math.max(W, H);
+    const gx1 = cx - Math.cos(rad)*len, gy1 = cy - Math.sin(rad)*len;
+    const gx2 = cx + Math.cos(rad)*len, gy2 = cy + Math.sin(rad)*len;
+    // Convert to layer-local coords (undo translate)
+    // We apply the gradient in world coords on the main canvas
+    const g = c.createLinearGradient(gx1 - (W/2 + offX), gy1 - (H/2 + offY),
+                                      gx2 - (W/2 + offX), gy2 - (H/2 + offY));
+    const [rA,gA,bA] = hexToRgb01(params.gradColorA).map(v=>Math.round(v*255));
+    const [rB,gB,bB] = hexToRgb01(params.gradColorB).map(v=>Math.round(v*255));
+    const op = params.gradOpacity / 100;
+    g.addColorStop(0, `rgba(${rA},${gA},${bA},${op})`);
+    g.addColorStop(1, `rgba(${rB},${gB},${bB},${op})`);
+    return g;
+}
+
+// Compute extra RGB shift contributed by the current warp displacement magnitude
+function warpRgbExtra(layerIdx) {
+    if (layerIdx === undefined || params.warpRgbDrive <= 0) return 0;
+    if (!params.warpLayers[layerIdx]) return 0;
+    if (params.warpType === 'none' || params.warpType === 'mesh') return 0;
+    const strength = Math.abs(effectiveWarpStrength());
+    return strength * params.warpRgbDrive * 0.25;
+}
+
+function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
+    const baseRgbShift = layerIdx !== undefined ? (params['layer'+(layerIdx+1)+'RgbShift'] || 0) : 0;
+    const rgbShift = baseRgbShift + warpRgbExtra(layerIdx);
+    const layerOpaque = !params.shGrad && rgbShift === 0;
+    const warpOn = layerIdx !== undefined ? params.warpLayers[layerIdx] : true;
+
+    if (rgbShift > 0) {
+        // Draw layer to offscreen, then do chromatic aberration on main canvas
+        const oc = document.createElement('canvas');
+        oc.width = canvas.width; oc.height = canvas.height;
+        const oc2 = oc.getContext('2d');
+        _renderLayerCore(oc2, angle, offX, offY, color, warpOn);
+        // Composite R, G, B channels with slight offsets using screen-blend math:
+        // Draw three copies (red+offset, green, blue-offset) with source-over
+        const r = rgbShift;
+        const saved_gco = c.globalCompositeOperation;
+        const saved_ga  = c.globalAlpha;
+        // Red channel: shift left
+        c.save();
+        c.globalCompositeOperation = saved_gco;
+        c.globalAlpha = saved_ga;
+        _blitChannel(c, oc, -r, 0, 255, 0, 0);
+        // Green channel: centre
+        _blitChannel(c, oc,  0, 0, 0, 255, 0);
+        // Blue channel: shift right
+        _blitChannel(c, oc,  r, 0, 0, 0, 255);
+        c.restore();
+        // Apply gradient tint on top if enabled
+        if (params.shGrad) {
+            c.save();
+            c.globalCompositeOperation = 'source-atop';
+            c.globalAlpha = params.gradOpacity / 100;
+            const grad = gradientForLayer(c, angle, offX, offY);
+            if (grad) {
+                c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+                c.fillStyle = grad;
+                c.fillRect(-canvas.width, -canvas.height, canvas.width*2, canvas.height*2);
+            }
+            c.restore();
+        }
+        return;
+    }
+
+    c.save();
+    c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+    c.rotate(angle * Math.PI/180);
+    // Apply gradient as stroke colour if grad is on
+    if (params.shGrad) {
+        const g = gradientForLayer(c, angle, offX, offY);
+        c.strokeStyle = g || color;
+    } else {
+        c.strokeStyle = color;
+    }
+    c.lineWidth   = params.stroke;
+    c.lineCap     = 'square';
+
+    const maxDist = Math.max(canvas.width, canvas.height) * 0.82;
+    const spacing = params.cellCount;
+    const size    = params.cellSizeOscSpeed > 0
+        ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
+        : params.cellSize;
+
+    switch (params.shape) {
+        case 'lines':       drawLines(c, spacing, size, maxDist, angle, warpOn);       break;
+        case 'radial':      drawRadial(c, spacing, size, maxDist, angle, warpOn);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle, warpOn);  break;
+        case 'iso-dots':    drawIsoDots(c,    spacing, size, maxDist, angle, warpOn);  break;
+        case 'grid':        drawGrid(c, spacing, size, maxDist, angle, warpOn);        break;
+        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'svg-import':  drawSvgImport(c, spacing, size, maxDist, angle, warpOn);   break;
+    }
+    c.restore();
+}
+
+// Channel blit helper for RGB shift
+function _blitChannel(c, src, dx, dy, rMul, gMul, bMul) {
+    const W = src.width, H = src.height;
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    const t2 = tmp.getContext('2d');
+    t2.drawImage(src, 0, 0);
+    const id = t2.getImageData(0, 0, W, H);
+    const d = id.data;
+    // Zero out unused channels
+    for (let i = 0; i < d.length; i += 4) {
+        d[i]   = rMul ? d[i] : 0;
+        d[i+1] = gMul ? d[i+1] : 0;
+        d[i+2] = bMul ? d[i+2] : 0;
+    }
+    t2.putImageData(id, 0, 0);
+    c.drawImage(tmp, dx, dy);
+}
+
+function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
+    c.save();
+    c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+    c.rotate(angle * Math.PI/180);
+    c.strokeStyle = color;
+    c.lineWidth   = params.stroke;
+    c.lineCap     = 'square';
+
+    const maxDist2 = Math.max(canvas.width, canvas.height) * 0.82;
+    const spacing2 = params.cellCount;
+    const size2    = params.cellSizeOscSpeed > 0
+        ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
+        : params.cellSize;
+
+    switch (params.shape) {
+        case 'lines':       drawLines(c, spacing2, size2, maxDist2, angle, warpOn);       break;
+        case 'radial':      drawRadial(c, spacing2, size2, maxDist2, angle, warpOn);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing2, size2, maxDist2, angle, warpOn);  break;
+        case 'grid':        drawGrid(c, spacing2, size2, maxDist2, angle, warpOn);        break;
+        case 'hexagon':     drawHexGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
+        case 'hex-tile':    drawHexTile(c, spacing2, size2, maxDist2, angle, warpOn);     break;
+        case 'triangle':    drawTriGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
+        case 'svg-import':  drawSvgImport(c, spacing2, size2, maxDist2, angle, warpOn);   break;
+    }
+    c.restore();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Shape renderers  (pass layerRot so mesh warp can choose mode)
+// ════════════════════════════════════════════════════════════════════
+function segs(warpOn)    { return (warpOn && params.warpType !== 'none') ? 64 : 1; }
+function isMesh()        { return params.warpType === 'mesh'; }
+function hasWarp(warpOn) { return warpOn && params.warpType !== 'none' && (isMesh() || params.warpStrength > 0); }
+
+// World-to-canvas for mesh: add mesh displacement to a point
+function mwarp(px, py, layerRot) {
+    if (!isMesh()) return {x: px, y: py};
+    const cpx = px + canvas.width/2;
+    const cpy = py + canvas.height/2;
+    const d   = meshDisplace(cpx, cpy, layerRot);
+    return { x: px + d.dx, y: py + d.dy };
+}
+
+// Unified warp for any vertex: mesh OR legacy (flag/sine/ripple)
+// warpOn = whether this layer has warp enabled
+function warpPt(x, y, rot, warpOn) {
+    if (!warpOn) return {x, y};
+    if (isMesh())        return mwarp(x, y, rot);
+    if (!hasWarp(true))  return {x, y};
+    return { x: x + warpDX(y, x), y };
+}
+
+// Warp strength with optional oscillator
+function effectiveWarpStrength() {
+    if (params.warpOscSpeed <= 0) return params.warpStrength;
+    return params.warpStrength * (1 + Math.sin(globalTime * params.warpOscSpeed * Math.PI * 2));
+}
+
+function drawLines(c, spacing, _size, maxDist, rot, warpOn) {
+    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
+    const sg = segs(warpOn);
+    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg, rot, warpOn);
+}
+
+function drawGrid(c, spacing, _size, maxDist, rot, warpOn) {
+    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
+    const sg = segs(warpOn);
+    for (let i = -n/2; i <= n/2; i++) {
+        strokeVLine(c, i * spacing, maxDist, sg, rot, warpOn);
+        strokeHLine(c, i * spacing, maxDist, sg, rot, warpOn);
+    }
+}
+
+function drawRadial(c, spacing, _size, maxDist, rot, warpOn) {
+    const warp    = hasWarp(warpOn);
+    const arcSeg  = warp ? 64 : 0;   // 0 = native arc()
+    const spokeSg = warp ? 16 : 1;
+    for (let r = spacing; r < maxDist; r += spacing) {
+        c.beginPath();
+        if (arcSeg > 0) {
+            for (let s = 0; s <= arcSeg; s++) {
+                const a = (s / arcSeg) * Math.PI * 2;
+                const p = warpPt(Math.cos(a)*r, Math.sin(a)*r, rot, warpOn);
+                s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            }
+            c.closePath();
+        } else {
+            c.arc(0, 0, r, 0, Math.PI*2);
+        }
+        c.stroke();
+    }
+    const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
+    for (let i = 0; i < spokes; i++) {
+        const a = (i/spokes)*Math.PI*2;
+        c.beginPath();
+        for (let s = 0; s <= spokeSg; s++) {
+            const t = s / spokeSg;
+            const p = warpPt(Math.cos(a)*maxDist*t, Math.sin(a)*maxDist*t, rot, warpOn);
+            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+        }
+        c.stroke();
+    }
+}
+
+function drawIsoCircles(c, spacing, size, maxDist, rot, warpOn) {
+    const hx = spacing, hy = spacing * Math.sqrt(3)/2;
+    const r  = Math.max(1, size/2);
+    const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
+    const arcSeg = hasWarp(warpOn) ? 32 : 0;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col*hx + (row%2===0 ? 0 : hx/2);
+            const cy = row*hy;
+            c.beginPath();
+            if (arcSeg > 0) {
+                for (let s = 0; s <= arcSeg; s++) {
+                    const a = (s / arcSeg) * Math.PI * 2;
+                    const p = warpPt(cx + Math.cos(a)*r, cy + Math.sin(a)*r, rot, warpOn);
+                    s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+                }
+                c.closePath();
+            } else {
+                c.arc(cx, cy, r, 0, Math.PI*2);
+            }
+            c.stroke();
+        }
+    }
+}
+
+function drawIsoDots(c, spacing, size, maxDist, rot, warpOn) {
+    const hx = spacing, hy = spacing * Math.sqrt(3) / 2;
+    const r  = Math.max(1, size / 2);
+    const cols = Math.ceil(maxDist / hx) + 2, rows = Math.ceil(maxDist / hy) + 2;
+    const segs = hasWarp(warpOn) ? 32 : 0;
+    c.fillStyle = c.strokeStyle;   // filled dots inherit the layer colour
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col * hx + (row % 2 === 0 ? 0 : hx / 2);
+            const cy = row * hy;
+            c.beginPath();
+            if (segs > 0) {
+                for (let s = 0; s <= segs; s++) {
+                    const a = (s / segs) * Math.PI * 2;
+                    const p = warpPt(cx + Math.cos(a) * r, cy + Math.sin(a) * r, rot, warpOn);
+                    s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+                }
+                c.closePath();
+            } else {
+                c.arc(cx, cy, r, 0, Math.PI * 2);
+            }
+            c.fill();
+        }
+    }
+}
+
+function drawHexGrid(c, spacing, size, maxDist, rot, warpOn) {
+    const R    = Math.max(1, size/2);
+    const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
+    const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const hcx = col*spacing*0.75;
+            const hcy = row*rowH + (Math.abs(col)%2===1 ? rowH/2 : 0);
+            c.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI/3)*i - Math.PI/6;
+                const vx = hcx + R*Math.cos(a), vy = hcy + R*Math.sin(a);
+                const p = warpPt(vx, vy, rot, warpOn);
+                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            }
+            c.closePath(); c.stroke();
+        }
+    }
+}
+
+// Isometric honeycomb tiling — hexagons always perfectly tile.
+// spacing = horizontal centre-to-centre; size >= spacing tiles flush, size < spacing adds gaps.
+function drawHexTile(c, spacing, size, maxDist, rot, warpOn) {
+    const R0  = spacing / Math.sqrt(3);              // circumradius for perfect tile
+    const R   = Math.min(R0, Math.max(1, size / Math.sqrt(3)));
+    const colPitch = spacing;
+    const rowPitch = spacing * Math.sqrt(3) / 2;
+    const cols = Math.ceil(maxDist / colPitch) + 2;
+    const rows = Math.ceil(maxDist / rowPitch) + 2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col * colPitch + (row % 2 !== 0 ? colPitch / 2 : 0);
+            const cy = row * rowPitch;
+            c.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i - Math.PI / 6;
+                const vx = cx + R * Math.cos(a);
+                const vy = cy + R * Math.sin(a);
+                const p = warpPt(vx, vy, rot, warpOn);
+                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            }
+            c.closePath(); c.stroke();
+        }
+    }
+}
+
+function drawTriGrid(c, spacing, size, maxDist, rot, warpOn) {
+    const h    = spacing*Math.sqrt(3)/2;
+    const cols = Math.ceil(maxDist*2/spacing)+4;
+    const rows = Math.ceil(maxDist*2/h)+4;
+    const s    = Math.max(2, size), th = s*Math.sqrt(3)/2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col*spacing*0.5, cy = row*h;
+            const up = (col+row)%2 === 0;
+            const verts = up
+                ? [[cx, cy-th*2/3],[cx+s/2, cy+th/3],[cx-s/2, cy+th/3]]
+                : [[cx, cy+th*2/3],[cx+s/2, cy-th/3],[cx-s/2, cy-th/3]];
+            c.beginPath();
+            verts.forEach(([vx,vy], i) => {
+                const p = warpPt(vx, vy, rot, warpOn);
+                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            });
+            c.closePath(); c.stroke();
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Segmented line helpers (global warp types: flag, sine, ripple)
+// ════════════════════════════════════════════════════════════════════
+function strokeVLine(c, lineX, maxDist, sg, rot, warpOn) {
+    c.beginPath();
+    const dy = (maxDist*2)/sg;
+    for (let s = 0; s <= sg; s++) {
+        const y = -maxDist + s*dy;
+        const p = warpPt(lineX, y, rot, warpOn);
+        s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+    }
+    c.stroke();
+}
+
+function strokeHLine(c, lineY, maxDist, sg, rot, warpOn) {
+    c.beginPath();
+    const dx = (maxDist*2)/sg;
+    for (let s = 0; s <= sg; s++) {
+        const x = -maxDist + s*dx;
+        if (warpOn && isMesh()) {
+            const p = mwarp(x, lineY, rot);
+            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+        } else if (warpOn) {
+            const y = lineY + warpDX(x, lineY);  // H-lines displace in Y
+            s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+        } else {
+            s === 0 ? c.moveTo(x, lineY) : c.lineTo(x, lineY);
+        }
+    }
+    c.stroke();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Warp displacement  (legacy flag / sine / ripple)
+// ════════════════════════════════════════════════════════════════════
+function warpDX(along, perp) {
+    if (params.warpStrength === 0 || params.warpType === 'none' || params.warpType === 'mesh') return 0;
+    const strength = effectiveWarpStrength();
+    const phase    = params.animateWarp ? warpPhase * 3 : 0;
+    const halfSize = Math.max(canvas.width, canvas.height) / 2;
+    const freq     = (Math.PI*2*3)/(halfSize*2);
+    switch (params.warpType) {
+        case 'flag': {
+            const rPx  = params.warpRadius/100*halfSize;
+            const d    = Math.sqrt(along*along+perp*perp);
+            const tRaw = Math.max(0, 1 - d/rPx);
+            // Quintic smoothstep — zero first AND second derivative at edges
+            // Gives a tight, Bézier-like smooth bell falloff
+            const t    = tRaw*tRaw*tRaw*(tRaw*(tRaw*6 - 15) + 10);
+            const freq2 = (Math.PI*2*2)/(halfSize*2);
+            return Math.sin(along*freq2+phase) * strength * t;
+        }
+        case 'sine':   return Math.sin(along*freq+phase) * strength;
+        case 'ripple': return Math.sin(Math.sqrt(along*along+perp*perp)*freq+phase) * strength;
+        default: return 0;
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Export: Modal open/close
+// ════════════════════════════════════════════════════════════════════
+function openDownload()  { document.getElementById('dlModal').classList.add('open'); }
+function closeDownload() { document.getElementById('dlModal').classList.remove('open'); }
+
+// ════════════════════════════════════════════════════════════════════
+//  Export: PNG  (0 = composite, 1/2/3 = single layer on transparent)
+// ════════════════════════════════════════════════════════════════════
+function exportLayer(layerNum) {
+    const oc  = document.createElement('canvas');
+    oc.width  = canvas.width; oc.height = canvas.height;
+    const oc2 = oc.getContext('2d');
+    if (layerNum === 0) {
+        oc2.drawImage(canvas, 0, 0);
+    } else {
+        oc2.clearRect(0, 0, oc.width, oc.height);
+        const cKey = 'layer'+layerNum+'Color';
+        const xKey = 'layer'+layerNum+'OffsetX';
+        const yKey = 'layer'+layerNum+'OffsetY';
+        renderLayerOn(oc2, layerAngle[layerNum-1], params[xKey], params[yKey], params[cKey]);
+    }
+    const link = document.createElement('a');
+    link.download = layerNum === 0 ? 'moire-composite.png' : `moire-layer${layerNum}.png`;
+    link.href = oc.toDataURL('image/png');
+    link.click();
+    closeDownload();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Export: SVG per layer
+// ════════════════════════════════════════════════════════════════════
+function exportSVG(layerNum) {
+    const cKey = 'layer'+layerNum+'Color';
+    const xKey = 'layer'+layerNum+'OffsetX';
+    const yKey = 'layer'+layerNum+'OffsetY';
+    const ang  = layerAngle[layerNum-1];
+    const offX = params[xKey], offY = params[yKey];
+    const color = params[cKey];
+    const w = canvas.width, h = canvas.height;
+    const cx = w/2+offX, cy = h/2+offY;
+
+    const paths = buildSVGPaths(w, h);
+    const svg =
+`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <g transform="translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${(ang%360).toFixed(2)})"
+     stroke="${color}" stroke-width="${params.stroke}" fill="none" stroke-linecap="square">
+    ${paths}
+  </g>
+</svg>`;
+
+    const blob = new Blob([svg], { type:'image/svg+xml' });
+    const link = document.createElement('a');
+    link.download = `moire-layer${layerNum}.svg`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    closeDownload();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  SVG Import
+// ════════════════════════════════════════════════════════════════════
+let importedSVG = null; // { shapes:[{type:'poly'|'open', pts:[[x,y],...]}], bbox:{cx,cy,w,h} }
+
+function loadSVGFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const result = parseSVGContent(e.target.result);
+            if (!result || !result.shapes.length) {
+                alert('No drawable shapes found in SVG. (Transforms and <use> are not supported.)');
+                return;
+            }
+            importedSVG = result;
+            params.shape = 'svg-import';
+            document.getElementById('shape').value = 'svg-import';
+            document.getElementById('svgImportUI').classList.remove('hidden');
+            document.getElementById('svgImportName').textContent =
+                '\u2714 ' + file.name + '  (' + result.shapes.length + ' shape' + (result.shapes.length !== 1 ? 's' : '') + ')';
+            if (paused) renderFrame(lastTime);
+        } catch(err) {
+            alert('Could not parse SVG: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function parseSVGContent(svgText) {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const svgEl = doc.querySelector('svg');
+    if (!svgEl) throw new Error('No <svg> element found');
+    const shapes = [];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    function addPts(pts) {
+        pts.forEach(([x,y]) => {
+            if (x < minX) minX=x; if (x > maxX) maxX=x;
+            if (y < minY) minY=y; if (y > maxY) maxY=y;
+        });
+    }
+    function push(type, pts) { if (pts.length >= 2) { addPts(pts); shapes.push({type, pts}); } }
+    function f(el, n) { return parseFloat(el.getAttribute(n)) || 0; }
+    function processEl(el) {
+        const tag = (el.tagName || '').toLowerCase().replace(/.*:/,'');
+        if (tag === 'g' || tag === 'svg') { Array.from(el.children).forEach(processEl); return; }
+        if (tag === 'line') {
+            push('open', [[f(el,'x1'),f(el,'y1')],[f(el,'x2'),f(el,'y2')]]);
+        } else if (tag === 'polyline') {
+            push('open', parsePointsList(el.getAttribute('points')||''));
+        } else if (tag === 'polygon') {
+            push('poly', parsePointsList(el.getAttribute('points')||''));
+        } else if (tag === 'rect') {
+            const x=f(el,'x'),y=f(el,'y'),w=f(el,'width'),h=f(el,'height');
+            push('poly', [[x,y],[x+w,y],[x+w,y+h],[x,y+h]]);
+        } else if (tag === 'circle') {
+            const cx=f(el,'cx'),cy=f(el,'cy'),r=f(el,'r');
+            push('poly', Array.from({length:32},(_,i)=>{const a=i/32*Math.PI*2;return[cx+Math.cos(a)*r,cy+Math.sin(a)*r];}));
+        } else if (tag === 'ellipse') {
+            const cx=f(el,'cx'),cy=f(el,'cy'),rx=f(el,'rx'),ry=f(el,'ry');
+            push('poly', Array.from({length:32},(_,i)=>{const a=i/32*Math.PI*2;return[cx+Math.cos(a)*rx,cy+Math.sin(a)*ry];}));
+        } else if (tag === 'path') {
+            const d = el.getAttribute('d');
+            if (d) parseSVGPath(d).forEach(s => push(s.type, s.pts));
+        }
+    }
+    processEl(svgEl);
+    if (!shapes.length) return null;
+    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+    return { shapes, bbox: { cx, cy, w: Math.max(maxX-minX,1), h: Math.max(maxY-minY,1) } };
+}
+
+function parsePointsList(str) {
+    const ns = (str||'').trim().split(/[\s,]+/).map(Number).filter(n=>!isNaN(n));
+    const pts = [];
+    for (let i=0;i+1<ns.length;i+=2) pts.push([ns[i],ns[i+1]]);
+    return pts;
+}
+
+function parseSVGPath(d) {
+    const subpaths = [];
+    const toks = [];
+    const re = /([MmZzLlHhVvCcSsQqTtAa])|([+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?)/g;
+    let m; while ((m = re.exec(d))) toks.push(m[1] !== undefined ? m[1] : +m[2]);
+    let ti = 0;
+    const num  = () => +toks[ti++];
+    const isN  = () => ti < toks.length && typeof toks[ti] === 'number';
+    let x=0,y=0,x0=0,y0=0,lc2x=null,lc2y=null,lq1x=null,lq1y=null,cur=[];
+    function flush(close) {
+        if (cur.length >= 2) subpaths.push({ type: close?'poly':'open', pts: cur.slice() });
+        cur = []; if (close) { x=x0; y=y0; }
+    }
+    while (ti < toks.length) {
+        let tok = toks[ti];
+        if (typeof tok !== 'string') { ti++; continue; }
+        const cmd = toks[ti++];
+        const abs = cmd === cmd.toUpperCase();
+        const ax = v => abs ? v : x + v;
+        const ay = v => abs ? v : y + v;
+        switch (cmd.toUpperCase()) {
+            case 'M': {
+                flush(false);
+                x = ax(num()); y = ay(num()); x0=x; y0=y; cur=[[x,y]];
+                while (isN()) { x=ax(num()); y=ay(num()); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'Z': {
+                cur.push([x0,y0]); flush(true); cur=[[x0,y0]];
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'L': {
+                while (isN()) { x=ax(num()); y=ay(num()); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'H': {
+                while (isN()) { x = abs?num():x+num(); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'V': {
+                while (isN()) { y = abs?num():y+num(); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'C': {
+                while (isN()) {
+                    const x1=ax(num()),y1=ay(num()),x2=ax(num()),y2=ay(num()),ex=ax(num()),ey=ay(num());
+                    _svgCubic(cur,x,y,x1,y1,x2,y2,ex,ey); lc2x=x2;lc2y=y2;x=ex;y=ey;lq1x=lq1y=null;
+                } break;
+            }
+            case 'S': {
+                while (isN()) {
+                    const x2=ax(num()),y2=ay(num()),ex=ax(num()),ey=ay(num());
+                    _svgCubic(cur,x,y,lc2x!==null?2*x-lc2x:x,lc2y!==null?2*y-lc2y:y,x2,y2,ex,ey);
+                    lc2x=x2;lc2y=y2;x=ex;y=ey;lq1x=lq1y=null;
+                } break;
+            }
+            case 'Q': {
+                while (isN()) {
+                    const x1=ax(num()),y1=ay(num()),ex=ax(num()),ey=ay(num());
+                    _svgQuad(cur,x,y,x1,y1,ex,ey); lq1x=x1;lq1y=y1;x=ex;y=ey;lc2x=lc2y=null;
+                } break;
+            }
+            case 'T': {
+                while (isN()) {
+                    const ex=ax(num()),ey=ay(num());
+                    _svgQuad(cur,x,y,lq1x!==null?2*x-lq1x:x,lq1y!==null?2*y-lq1y:y,ex,ey);
+                    lq1x=2*x-(lq1x!==null?lq1x:x);lq1y=2*y-(lq1y!==null?lq1y:y);x=ex;y=ey;lc2x=lc2y=null;
+                } break;
+            }
+            case 'A': {
+                while (isN()) {
+                    const rx=num(),ry=num(),xr=num(),la=num(),sf=num(),ex=ax(num()),ey=ay(num());
+                    _svgArc(cur,x,y,rx,ry,xr,!!la,!!sf,ex,ey); x=ex;y=ey;lc2x=lc2y=lq1x=lq1y=null;
+                } break;
+            }
+        }
+    }
+    flush(false);
+    return subpaths;
+}
+
+function _svgCubic(pts,x0,y0,x1,y1,x2,y2,x3,y3,n=16){
+    for(let i=1;i<=n;i++){const t=i/n,mt=1-t;
+        pts.push([mt*mt*mt*x0+3*mt*mt*t*x1+3*mt*t*t*x2+t*t*t*x3,
+                  mt*mt*mt*y0+3*mt*mt*t*y1+3*mt*t*t*y2+t*t*t*y3]);}
+}
+function _svgQuad(pts,x0,y0,x1,y1,x2,y2,n=12){
+    for(let i=1;i<=n;i++){const t=i/n,mt=1-t;
+        pts.push([mt*mt*x0+2*mt*t*x1+t*t*x2, mt*mt*y0+2*mt*t*y1+t*t*y2]);}
+}
+function _svgArc(pts,x1,y1,rx,ry,xRot,laf,sf,x2,y2,n=16){
+    if(rx===0||ry===0){pts.push([x2,y2]);return;}
+    const ph=xRot*Math.PI/180,cs=Math.cos(ph),sn=Math.sin(ph);
+    const dx=(x1-x2)/2,dy=(y1-y2)/2;
+    const x1p=cs*dx+sn*dy,y1p=-sn*dx+cs*dy;
+    let rx2=rx*rx,ry2=ry*ry,xp2=x1p*x1p,yp2=y1p*y1p;
+    const cr=xp2/rx2+yp2/ry2; if(cr>1){const s=Math.sqrt(cr);rx*=s;ry*=s;rx2=rx*rx;ry2=ry*ry;}
+    const dq=(rx2*ry2-rx2*yp2-ry2*xp2)/(rx2*yp2+ry2*xp2);
+    const sq=Math.sqrt(Math.max(0,dq))*(laf===sf?-1:1);
+    const cxp=sq*rx*y1p/ry,cyp=-sq*ry*x1p/rx;
+    const cx=(x1+x2)/2+cs*cxp-sn*cyp,cy=(y1+y2)/2+sn*cxp+cs*cyp;
+    const ang=([a,b])=>Math.atan2(b,a);
+    let a1=ang([(x1p-cxp)/rx,(y1p-cyp)/ry]);
+    let dA=ang([(-x1p-cxp)/rx,(-y1p-cyp)/ry])-a1;
+    if(!sf&&dA>0)dA-=Math.PI*2; if(sf&&dA<0)dA+=Math.PI*2;
+    for(let i=1;i<=n;i++){const a=a1+dA*i/n;
+        pts.push([cs*rx*Math.cos(a)-sn*ry*Math.sin(a)+cx,sn*rx*Math.cos(a)+cs*ry*Math.sin(a)+cy]);}
+}
+
+function drawSvgImport(c, spacing, size, maxDist, rot, warpOn) {
+    if (!importedSVG) return;
+    const { shapes, bbox } = importedSVG;
+    const scale = Math.max(1, size) / Math.max(bbox.w, bbox.h);
+    const n = Math.ceil(maxDist / spacing) + 2;
+    for (let row = -n; row <= n; row++) {
+        for (let col = -n; col <= n; col++) {
+            const ox = col * spacing;
+            const oy = row * spacing;
+            for (const sh of shapes) {
+                c.beginPath();
+                sh.pts.forEach(([px, py], i) => {
+                    const sx = (px - bbox.cx) * scale + ox;
+                    const sy = (py - bbox.cy) * scale + oy;
+                    const p = warpPt(sx, sy, rot, warpOn);
+                    i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+                });
+                if (sh.type === 'poly') c.closePath();
+                c.stroke();
+            }
+        }
+    }
+}
+
+function buildSVGPaths(w, h) {
+    const maxDist = Math.max(w, h) * 0.82;
+    const spacing = params.cellCount;
+    const size    = params.cellSize;
+    const parts   = [];
+
+    switch (params.shape) {
+        case 'lines': {
+            const n = Math.ceil(maxDist*2/spacing)+4;
+            for (let i = -n/2; i <= n/2; i++)
+                parts.push(`<line x1="${i*spacing}" y1="${-maxDist}" x2="${i*spacing}" y2="${maxDist}"/>`);
+            break;
+        }
+        case 'grid': {
+            const n = Math.ceil(maxDist*2/spacing)+4;
+            for (let i = -n/2; i <= n/2; i++) {
+                const p = i*spacing;
+                parts.push(`<line x1="${p}" y1="${-maxDist}" x2="${p}" y2="${maxDist}"/>`);
+                parts.push(`<line x1="${-maxDist}" y1="${p}" x2="${maxDist}" y2="${p}"/>`);
+            }
+            break;
+        }
+        case 'radial': {
+            for (let r = spacing; r < maxDist; r += spacing)
+                parts.push(`<circle cx="0" cy="0" r="${r}"/>`);
+            const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
+            for (let i = 0; i < spokes; i++) {
+                const a = (i/spokes)*Math.PI*2;
+                parts.push(`<line x1="0" y1="0" x2="${(Math.cos(a)*maxDist).toFixed(1)}" y2="${(Math.sin(a)*maxDist).toFixed(1)}"/>`);
+            }
+            break;
+        }
+        case 'iso-circles': {
+            const hx = spacing, hy = spacing*Math.sqrt(3)/2;
+            const r  = Math.max(1, size/2);
+            const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const x = (col*hx+(row%2===0?0:hx/2)).toFixed(1);
+                    const y = (row*hy).toFixed(1);
+                    parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}"/>`);
+                }
+            break;
+        }
+        case 'iso-dots': {
+            const hx = spacing, hy = spacing*Math.sqrt(3)/2;
+            const r  = Math.max(1, size/2);
+            const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const x = (col*hx+(row%2===0?0:hx/2)).toFixed(1);
+                    const y = (row*hy).toFixed(1);
+                    parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="black" stroke="none"/>`);
+                }
+            break;
+        }
+        case 'hexagon': {
+            const R    = Math.max(1, size/2);
+            const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
+            const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const hcx = col*spacing*0.75;
+                    const hcy = row*rowH+(Math.abs(col)%2===1?rowH/2:0);
+                    const pts = Array.from({length:6},(_,i)=>{
+                        const a = (Math.PI/3)*i-Math.PI/6;
+                        return `${(hcx+R*Math.cos(a)).toFixed(1)},${(hcy+R*Math.sin(a)).toFixed(1)}`;
+                    }).join(' ');
+                    parts.push(`<polygon points="${pts}"/>`);
+                }
+            break;
+        }
+        case 'hex-tile': {
+            const R0  = spacing / Math.sqrt(3);
+            const R   = Math.min(R0, Math.max(1, size / Math.sqrt(3)));
+            const colPitch = spacing, rowPitch = spacing * Math.sqrt(3) / 2;
+            const cols = Math.ceil(maxDist/colPitch)+2, rows = Math.ceil(maxDist/rowPitch)+2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const cx = col*colPitch + (row%2!==0 ? colPitch/2 : 0);
+                    const cy = row*rowPitch;
+                    const pts = Array.from({length:6},(_,i)=>{
+                        const a = (Math.PI/3)*i-Math.PI/6;
+                        return `${(cx+R*Math.cos(a)).toFixed(1)},${(cy+R*Math.sin(a)).toFixed(1)}`;
+                    }).join(' ');
+                    parts.push(`<polygon points="${pts}"/>`);
+                }
+            break;
+        }
+        case 'triangle': {
+            const h2   = spacing*Math.sqrt(3)/2;
+            const s    = Math.max(2, size), th = s*Math.sqrt(3)/2;
+            const cols = Math.ceil(maxDist*2/spacing)+4;
+            const rows = Math.ceil(maxDist*2/h2)+4;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const cx = col*spacing*0.5, cy = row*h2;
+                    const up = (col+row)%2===0;
+                    const pts = up
+                        ? `${cx.toFixed(1)},${(cy-th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy+th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy+th/3).toFixed(1)}`
+                        : `${cx.toFixed(1)},${(cy+th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy-th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy-th/3).toFixed(1)}`;
+                    parts.push(`<polygon points="${pts}"/>`);
+                }
+            break;
+        }
+        case 'svg-import': {
+            if (importedSVG) {
+                const { shapes: svgShapes, bbox } = importedSVG;
+                const scale = Math.max(1, size) / Math.max(bbox.w, bbox.h);
+                const n = Math.ceil(maxDist / spacing) + 2;
+                for (let row = -n; row <= n; row++) {
+                    for (let col = -n; col <= n; col++) {
+                        const ox = col * spacing, oy = row * spacing;
+                        for (const sh of svgShapes) {
+                            const pStr = sh.pts.map(([px,py]) =>
+                                `${((px-bbox.cx)*scale+ox).toFixed(1)},${((py-bbox.cy)*scale+oy).toFixed(1)}`
+                            ).join(' ');
+                            parts.push(sh.type === 'poly'
+                                ? `<polygon points="${pStr}"/>`
+                                : `<polyline points="${pStr}"/>`);
+                        }
+                    }
+                }
+            }
+            break;
+        }
+    }
+    return parts.join('\n    ');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  ── LIGHTBOX MODE ───────────────────────────────────────────────
+//  Circular disc with external gear ring + 3 planetary gears
+//  (12 / 4 / 8 o'clock positions) for laser-cut / 3D-print builds.
+// ════════════════════════════════════════════════════════════════════
+function toggleLightbox() {
+    params.lightbox = !params.lightbox;
+    const btn = document.getElementById('lightboxToggle');
+    btn.textContent = params.lightbox ? 'ON' : 'OFF';
+    btn.classList.toggle('lightbox-on',  params.lightbox);
+    btn.classList.toggle('lightbox-off', !params.lightbox);
+    document.getElementById('lightboxControls').classList.toggle('hidden', !params.lightbox);
+    if (params.lightbox) {
+        // Enforce circle cutout so the disc is always circular
+        params.cutout = 'circle';
+        document.getElementById('cutout').value = 'circle';
+    }
+    if (paused) renderFrame(lastTime);
+}
+
+// ── Gear geometry calculator ──────────────────────────────────────
+// Returns all derived dimensions in both px (for canvas) and mm (for SVG).
+function lbCalcGear() {
+    const m_mm       = Math.max(0.5, params.lbModule);
+    const D_mm       = Math.max(20,  params.lbDiameter);
+    const N_planet   = Math.max(8,   Math.round(params.lbPlanetTeeth));
+    const gap_mm     = Math.max(0,   params.lbPlanetGap);
+    const axle_mm    = Math.max(1,   params.lbAxleHole);
+    const cHole_mm   = Math.max(1,   params.lbCentreHole);
+
+    // Ring gear — N_ring computed from disc OD and module
+    const N_ring           = Math.max(10, Math.round(Math.PI * D_mm / m_mm));
+    const Rpitch_ring_mm   = N_ring * m_mm / (2 * Math.PI);   // actual pitch radius
+    const Ra_ring_mm       = Rpitch_ring_mm + m_mm;
+    const Rd_ring_mm       = Math.max(1, Rpitch_ring_mm - m_mm);  // symmetric triangular
+
+    // Planetary gear (same module → matching tooth size)
+    const Rpitch_planet_mm = N_planet * m_mm / 2;
+    const Ra_planet_mm     = Rpitch_planet_mm + m_mm;
+    const Rd_planet_mm     = Math.max(0.5, Rpitch_planet_mm - m_mm);  // symmetric
+    const planetDist_mm    = Rpitch_ring_mm + Rpitch_planet_mm + gap_mm;
+
+    // Scale so everything fits on canvas with margin
+    const totalR_mm  = planetDist_mm + Ra_planet_mm + m_mm + 4;
+    const S          = (canvas.width * 0.47) / totalR_mm;   // px / mm
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+
+    return {
+        cx, cy, S, m_mm,
+        N_ring, Rpitch_ring_px: Rpitch_ring_mm * S, Ra_ring_px: Ra_ring_mm * S, Rd_ring_px: Rd_ring_mm * S,
+        N_planet, Rpitch_planet_px: Rpitch_planet_mm * S, Ra_planet_px: Ra_planet_mm * S, Rd_planet_px: Rd_planet_mm * S,
+        planetDist_px: planetDist_mm * S, planetDist_mm,
+        axle_px: (axle_mm / 2) * S,
+        cHole_px: (cHole_mm / 2) * S,
+        // mm originals
+        Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
+        Rpitch_planet_mm, Ra_planet_mm, Rd_planet_mm,
+        axle_mm, cHole_mm, D_mm, gearRatio: N_ring / N_planet,
+    };
+}
+
+// 12 o'clock = -π/2, then +120° each (equal spacing)
+const LB_PLANET_ANGLES = [
+    -Math.PI / 2,
+    -Math.PI / 2 + (2 * Math.PI / 3),
+    -Math.PI / 2 + (4 * Math.PI / 3),
+];
+
+// ── Canvas gear path ──────────────────────────────────────────────
+function drawGearPath(ctx, cx, cy, pitchR, m_px, N, startAngle) {
+    // Triangular tooth profile — tip at Ra, valley at Rd, pure straight lines.
+    // Each tooth occupies exactly one full pitch (peak-to-peak = 2π/N).
+    const Ra  = pitchR + m_px;
+    const Rd  = Math.max(1, pitchR - m_px);
+    const aPT = (2 * Math.PI) / N;
+
+    ctx.beginPath();
+    ctx.moveTo(cx + Rd * Math.cos(startAngle - aPT / 2),
+               cy + Rd * Math.sin(startAngle - aPT / 2));
+    for (let i = 0; i < N; i++) {
+        const mid = startAngle + i * aPT;
+        ctx.lineTo(cx + Ra * Math.cos(mid),             cy + Ra * Math.sin(mid));
+        ctx.lineTo(cx + Rd * Math.cos(mid + aPT / 2),   cy + Rd * Math.sin(mid + aPT / 2));
+    }
+    ctx.closePath();
+}
+
+// ── SVG gear path (mm units, straight triangular teeth) ──────────
+function gearPathSVG(cx, cy, pitchR, module, N, startAngle) {
+    const Ra  = pitchR + module;
+    const Rd  = Math.max(0.1, pitchR - module);
+    const aPT = (2 * Math.PI) / N;
+    const f   = v => v.toFixed(4);
+    const pt  = (r, a) => `${f(cx + r * Math.cos(a))},${f(cy + r * Math.sin(a))}`;
+
+    let d = `M ${pt(Rd, startAngle - aPT / 2)} `;
+    for (let i = 0; i < N; i++) {
+        const mid = startAngle + i * aPT;
+        d += `L ${pt(Ra, mid)} L ${pt(Rd, mid + aPT / 2)} `;
+    }
+    return d + 'Z';
+}
+
+// Circular hole as SVG path (two semicircle arcs)
+function circleSVG(cx, cy, r) {
+    const f = v => v.toFixed(4);
+    return `M ${f(cx - r)},${f(cy)} A ${f(r)},${f(r)} 0 1,1 ${f(cx + r)},${f(cy)} A ${f(r)},${f(r)} 0 1,1 ${f(cx - r)},${f(cy)} Z`;
+}
+
+// ── Overlay drawn on canvas each frame ───────────────────────────
+function drawLightboxOverlay() {
+    const g = lbCalcGear();
+    const { cx, cy, N_ring, N_planet, Rpitch_ring_px, Rd_ring_px,
+            Rpitch_planet_px, planetDist_px, cHole_px, axle_px } = g;
+
+    const θR = layerAngle[0] * Math.PI / 180;              // ring rotation (rad)
+    const θP = -θR * N_ring / N_planet;                    // planet self-rotation
+
+    const c2d = canvas.getContext('2d');
+    c2d.save();
+
+    // ── Ring gear (amber/gold) ────────────────────────────────────
+    c2d.strokeStyle = 'rgba(251,191,36,0.92)';
+    c2d.lineWidth   = 1.5;
+    drawGearPath(c2d, cx, cy, Rpitch_ring_px, g.Ra_ring_px - Rpitch_ring_px, N_ring, θR);
+    c2d.stroke();
+
+    // Dedendum circle (body edge)
+    c2d.strokeStyle = 'rgba(251,191,36,0.30)';
+    c2d.beginPath(); c2d.arc(cx, cy, Rd_ring_px, 0, Math.PI * 2); c2d.stroke();
+
+    // Centre shaft hole
+    c2d.strokeStyle = 'rgba(251,191,36,0.75)';
+    c2d.beginPath(); c2d.arc(cx, cy, cHole_px, 0, Math.PI * 2); c2d.stroke();
+
+    // ── Planetary gears (cyan) ────────────────────────────────────
+    c2d.strokeStyle = 'rgba(100,215,255,0.92)';
+    c2d.lineWidth   = 1.5;
+    LB_PLANET_ANGLES.forEach(φ => {
+        const pcx = cx + planetDist_px * Math.cos(φ);
+        const pcy = cy + planetDist_px * Math.sin(φ);
+        // Phase: derived from rolling-contact constraint so each planet
+        // tooth meshes perfectly with the ring gear at all times.
+        // phase = φ·(1 + N_ring/N_planet) + π + θP − π/N_planet
+        const phase = φ * (1 + N_ring / N_planet) + Math.PI + θP - Math.PI / N_planet;
+        const m_px  = g.Ra_planet_px - Rpitch_planet_px;
+        drawGearPath(c2d, pcx, pcy, Rpitch_planet_px, m_px, N_planet, phase);
+        c2d.stroke();
+        // Axle hole
+        c2d.beginPath(); c2d.arc(pcx, pcy, axle_px, 0, Math.PI * 2); c2d.stroke();
+        // Dashed centre line from disc centre to planet centre
+        c2d.save();
+        c2d.setLineDash([3, 4]);
+        c2d.strokeStyle = 'rgba(100,215,255,0.22)';
+        c2d.lineWidth   = 0.7;
+        c2d.beginPath(); c2d.moveTo(cx, cy); c2d.lineTo(pcx, pcy); c2d.stroke();
+        c2d.restore();
+    });
+
+    c2d.restore();
+    updateLbGearInfo(g);
+}
+
+function updateLbGearInfo(g) {
+    const el = document.getElementById('lbGearInfo');
+    if (!el) return;
+    const { N_ring, N_planet, gearRatio, Rpitch_ring_mm, Rpitch_planet_mm,
+            Ra_ring_mm, Ra_planet_mm, planetDist_mm, m_mm, D_mm } = g;
+    el.innerHTML =
+        `Ring: <b>${N_ring}</b> teeth &nbsp;·&nbsp; Planet: <b>${N_planet}</b> teeth<br>` +
+        `Gear ratio disc:planet = 1 : <b>${gearRatio.toFixed(2)}</b><br>` +
+        `Disc OD: <b>${(Ra_ring_mm * 2).toFixed(1)} mm</b> &nbsp;·&nbsp; Planet OD: <b>${(Ra_planet_mm * 2).toFixed(1)} mm</b><br>` +
+        `Planet centre from disc centre: <b>${planetDist_mm.toFixed(1)} mm</b>`;
+}
+
+// ── SVG export for laser cutting / 3D printing ───────────────────
+// which: 0=all-layers composite, 1-3=single layer disc, 4=planet gears only
+function exportLightboxSVG(which) {
+    const g = lbCalcGear();
+    const { N_ring, N_planet, Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
+            Rpitch_planet_mm, Ra_planet_mm, planetDist_mm,
+            cHole_mm, axle_mm, m_mm, D_mm } = g;
+
+    const totalR  = planetDist_mm + Ra_planet_mm + m_mm + 6;
+    const sz      = totalR * 2;
+    const cx = sz / 2, cy = sz / 2;
+    const f       = v => v.toFixed(3);
+    const W       = canvas.width;
+    const S       = D_mm / W;           // mm per canvas-px
+    const sw      = Math.max(0.05, params.stroke * S).toFixed(3);
+
+    // Gear cut paths
+    const discCut  = gearPathSVG(cx, cy, Rpitch_ring_mm, m_mm, N_ring, 0);
+    const cHolePth = circleSVG(cx, cy, cHole_mm / 2);
+
+    const planetHTML = LB_PLANET_ANGLES.map(φ => {
+        const px = cx + planetDist_mm * Math.cos(φ);
+        const py = cy + planetDist_mm * Math.sin(φ);
+        return `    <path d="${gearPathSVG(px, py, Rpitch_planet_mm, m_mm, N_planet, φ * (1 + N_ring / N_planet) + Math.PI - Math.PI / N_planet)}"/>` +
+               `\n    <path d="${circleSVG(px, py, axle_mm / 2)}"/>`;
+    }).join('\n');
+
+    const header = `<svg xmlns="http://www.w3.org/2000/svg"
+  width="${f(sz)}mm" height="${f(sz)}mm" viewBox="0 0 ${f(sz)} ${f(sz)}">
+  <style>
+    .cut    { fill:none; stroke:red;   stroke-width:0.15 }
+    .planet { fill:none; stroke:#00f;  stroke-width:0.15 }
+    .engrave{ fill:none; stroke:#222;  stroke-width:${sw} }
+  </style>`;
+
+    let svg = '', filename = '';
+
+    if (which === 4) {
+        // Planets only  (identical — print 3 copies)
+        svg = `${header}
+  <!-- One planetary gear — duplicate × 3 for full build -->
+  <g class="planet">
+${planetHTML}
+  </g>
+</svg>`;
+        filename = 'lightbox-planets.svg';
+    } else {
+        const layers = which === 0 ? [1, 2, 3] : [which];
+        let defs = '', engraving = '';
+        for (const n of layers) {
+            const deg = (layerAngle[n - 1] || 0).toFixed(2);
+            const ox  = f((params['layer' + n + 'OffsetX'] || 0) * S);
+            const oy  = f((params['layer' + n + 'OffsetY'] || 0) * S);
+            defs      += `\n    <clipPath id="c${n}"><circle cx="${f(cx)}" cy="${f(cy)}" r="${f(Rpitch_ring_mm)}"/></clipPath>`;
+            engraving += `\n  <g id="L${n}" class="engrave" clip-path="url(#c${n})"
+     transform="translate(${f(cx + parseFloat(ox))},${f(cy + parseFloat(oy))}) rotate(${deg}) scale(${f(S)})">
+    ${buildSVGPaths(W, W)}
+  </g>`;
+        }
+        svg = `${header}
+  <defs>${defs}
+  </defs>${engraving}
+  <g class="cut">
+    <path d="${discCut}"/>
+    <path d="${cHolePth}"/>
+  </g>
+  <g class="planet">
+${planetHTML}
+  </g>
+</svg>`;
+        filename = which === 0 ? 'lightbox-all.svg' : `lightbox-L${which}.svg`;
+    }
+
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const a    = document.createElement('a');
+    a.download = filename;
+    a.href     = URL.createObjectURL(blob);
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Editable value labels (click-to-type on any slider display)
+// ════════════════════════════════════════════════════════════════════
+function initEditableValues() {
+    document.querySelectorAll('input[type="range"]').forEach(slider => {
+        const valSpan = document.getElementById('val-' + slider.id);
+        if (!valSpan || valSpan.tagName !== 'SPAN') return;
+
+        const inp = document.createElement('input');
+        inp.type      = 'number';
+        inp.id        = 'val-' + slider.id;
+        inp.className = 'val-edit';
+        inp.value     = valSpan.textContent;
+        if (slider.step) inp.step = slider.step;
+
+        // Proxy textContent → value so all existing update code keeps working
+        Object.defineProperty(inp, 'textContent', {
+            get()  { return this.value; },
+            set(v) { this.value = String(v); },
+            configurable: true, enumerable: false
+        });
+
+        valSpan.replaceWith(inp);
+
+        inp.addEventListener('change', () => {
+            let raw = parseFloat(inp.value);
+            if (isNaN(raw)) {
+                inp.value = speedIds.has(slider.id) ? fmtSpeed(params[slider.id]) : slider.value;
+                return;
+            }
+            if (speedIds.has(slider.id)) {
+                raw = Math.max(-SPEED_LOG_MAX, Math.min(SPEED_LOG_MAX, raw));
+                params[slider.id] = raw;
+                slider.value      = speedToSlider(raw);
+                inp.value         = fmtSpeed(raw);
+            } else {
+                raw = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), raw));
+                const decimals = slider.step && parseFloat(slider.step) < 1 ? 2 : 0;
+                params[slider.id] = raw;
+                slider.value      = raw;
+                inp.value         = raw.toFixed(decimals);
+            }
+            if (paused) renderFrame(lastTime);
+        });
+    });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Presets
+// ════════════════════════════════════════════════════════════════════
+function refreshPresetsUI() {
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    const sel = document.getElementById('presetSelect');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— select —</option>';
+    Object.keys(presets).sort().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = name;
+        sel.appendChild(opt);
+    });
+    if (cur && presets[cur]) sel.value = cur;
+}
+
+function savePresetAs() {
+    const name = prompt('Preset name:');
+    if (!name || !name.trim()) return;
+    const key = name.trim();
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    presets[key] = {
+        params:     Object.assign({}, params),
+        meshPoints: JSON.parse(JSON.stringify(meshPoints)),
+        layerAngle: layerAngle.slice()
+    };
+    localStorage.setItem('moirePresets', JSON.stringify(presets));
+    refreshPresetsUI();
+    document.getElementById('presetSelect').value = key;
+}
+
+function loadPreset() {
+    const name = document.getElementById('presetSelect').value;
+    if (!name) return;
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    if (!presets[name]) return;
+    applyFullState(presets[name]);
+}
+
+function deletePreset() {
+    const name = document.getElementById('presetSelect').value;
+    if (!name) return;
+    if (!confirm('Delete preset "' + name + '"?')) return;
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    delete presets[name];
+    localStorage.setItem('moirePresets', JSON.stringify(presets));
+    refreshPresetsUI();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Save / Load State
+// ════════════════════════════════════════════════════════════════════
+function saveState() {
+    const state = {
+        v: 1,
+        params: Object.assign({}, params),
+        meshPoints: JSON.parse(JSON.stringify(meshPoints)),
+        layerAngle: layerAngle.slice()
+    };
+    try { localStorage.setItem('moireState', JSON.stringify(state)); } catch(e) {}
+    const btn = document.getElementById('saveBtn');
+    const orig = btn.textContent;
+    btn.textContent = '\u2714 Saved!';
+    setTimeout(() => btn.textContent = orig, 1400);
+}
+
+function loadState() {
+    const raw = localStorage.getItem('moireState');
+    const btn = document.getElementById('loadBtn');
+    const orig = btn.textContent;
+    if (!raw) {
+        btn.textContent = '\u2717 No save';
+        setTimeout(() => btn.textContent = orig, 1400);
+        return;
+    }
+    try {
+        applyFullState(JSON.parse(raw));
+        btn.textContent = '\u2714 Loaded!';
+        setTimeout(() => btn.textContent = orig, 1400);
+    } catch(e) {
+        alert('Could not load state: ' + e.message);
+    }
+}
+
+function applyFullState(state) {
+    Object.assign(params, state.params);
+    if (state.meshPoints && state.meshPoints.length)
+        meshPoints = JSON.parse(JSON.stringify(state.meshPoints));
+    if (state.layerAngle)
+        state.layerAngle.forEach((v, i) => { layerAngle[i] = v; });
+
+    function setSlider(id, val) {
+        const el = document.getElementById(id); if (!el) return;
+        el.value = val;
+        const vEl = document.getElementById('val-'+id);
+        if (vEl) vEl.textContent = parseFloat(val).toFixed(el.step && parseFloat(el.step) < 1 ? 2 : 0);
+    }
+    function setSelect(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+    function setColor(id, val)  { const el = document.getElementById(id); if (el) el.value = val; }
+
+    setSelect('shape', params.shape);
+    document.getElementById('svgImportUI').classList.toggle('hidden', params.shape !== 'svg-import');
+    setSelect('blendMode', params.blendMode);
+    setSlider('blendStrength', params.blendStrength);
+    setSlider('cellCount', params.cellCount);
+    setSlider('cellSize',  params.cellSize);
+    setSlider('stroke',    params.stroke);
+    setSelect('cutout',  params.cutout);
+    setColor('bgColor',  params.bgColor);
+    setSelect('warpType',    params.warpType);
+    setSlider('warpStrength', params.warpStrength);
+    setSlider('warpRadius',   params.warpRadius);
+    setSlider('warpOscSpeed', params.warpOscSpeed);
+    setSlider('warpRgbDrive', params.warpRgbDrive);
+    setSlider('meshStrength', params.meshStrength);
+    setSelect('meshMode',     params.meshMode);
+    document.getElementById('animateWarp').checked = !!params.animateWarp;
+    const isMesh = params.warpType === 'mesh';
+    document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+    meshCanvas.style.pointerEvents = (isMesh && meshEditMode) ? 'auto' : 'none';
+    [1,2,3].forEach(n => _syncWarpBtn(n));
+    for (let i = 1; i <= 3; i++) {
+        setColor('layer'+i+'Color',    params['layer'+i+'Color']);
+        const spEl  = document.getElementById('layer'+i+'Speed');
+        if (spEl)  spEl.value = speedToSlider(params['layer'+i+'Speed']);
+        const spVEl = document.getElementById('val-layer'+i+'Speed');
+        if (spVEl) spVEl.textContent = fmtSpeed(params['layer'+i+'Speed']);
+        setSlider('layer'+i+'OffsetX',  params['layer'+i+'OffsetX']);
+        setSlider('layer'+i+'OffsetY',  params['layer'+i+'OffsetY']);
+        setSlider('layer'+i+'Opacity',  params['layer'+i+'Opacity']);
+        setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+        const tb = document.getElementById('layer'+i+'Toggle');
+        if (tb) {
+            tb.textContent = params['layer'+i+'On'] ? 'ON' : 'OFF';
+            tb.classList.toggle('layer-on',  !!params['layer'+i+'On']);
+            tb.classList.toggle('layer-off', !params['layer'+i+'On']);
+        }
+    }
+    [['Grad','shGrad'],['Noise','shNoise'],['ColorNoise','shColorNoise'],['Blur','shBlur']].forEach(([k,p]) => {
+        const sb = document.getElementById('sh'+k+'Toggle');
+        if (sb) {
+            sb.textContent = params[p] ? 'ON' : 'OFF';
+            sb.classList.toggle('shader-on',  !!params[p]);
+            sb.classList.toggle('shader-off', !params[p]);
+        }
+    });
+    setColor('gradColorA', params.gradColorA);
+    setColor('gradColorB', params.gradColorB);
+    setSlider('gradAngle',         params.gradAngle);
+    setSlider('gradOpacity',       params.gradOpacity);
+    setSlider('noiseScale',        params.noiseScale);
+    setSlider('noiseSpeed',        params.noiseSpeed);
+    setSlider('noiseOpacity',      params.noiseOpacity);
+    setSlider('colorNoiseScale',   params.colorNoiseScale);
+    setSlider('colorNoiseSpeed',   params.colorNoiseSpeed);
+    setSlider('colorNoiseExpand',  params.colorNoiseExpand);
+    setSlider('colorNoiseOpacity', params.colorNoiseOpacity);
+    setSlider('blurPersist',       params.blurPersist);
+    updateMeshKnobs();
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Boot
+// ════════════════════════════════════════════════════════════════════
+resizeCanvas();  // sets up all canvases, inits WebGL & mesh knobs
+initEditableValues();
+refreshPresetsUI();
+animationFrame = requestAnimationFrame(renderFrame);
+console.log('Moiré + Shaders ready!');
+    </script>
+</body>
+</html>

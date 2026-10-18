@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MILKY — Design, code & strange digital things</title>
+  <meta name="description" content="MILKY is an independent New Zealand design studio making distinctive websites, identities, generative systems and interactive installations.">
+  <meta name="theme-color" content="#03090b">
+  <meta property="og:title" content="MILKY — Independent digital design studio">
+  <meta property="og:description" content="Design, code and strange digital things — made end to end in Aotearoa New Zealand.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/milky.ico" sizes="16x16 32x32 48x48">
+  <link rel="apple-touch-icon" href="assets/milky-256.png">
+  <link rel="stylesheet" href="styles.css?v=nest-enquiry-1">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+  <a class="skip-link" href="#work">Skip to selected work</a>
+
+  <canvas id="forest" aria-hidden="true"></canvas>
+  <canvas id="vgpuAtmosphere" aria-hidden="true"></canvas>
+  <div class="scene-fallback" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="loader" id="loader" role="status" aria-live="polite">
+    <div class="loader__top"><span>MILKY®</span><span>NZ / 2026</span></div>
+    <div class="loader__body">
+      <p>Growing a digital habitat</p>
+      <div class="loader__track"><i id="loaderBar"></i></div>
+      <span id="loaderCount">000</span>
+    </div>
+  </div>
+
+  <header class="site-head" id="siteHead">
+    <a class="brand" href="#top" aria-label="MILKY, back to top">
+      <span class="brand__mark" aria-hidden="true">M</span>
+      <span>MILKY</span>
+    </a>
+
+    <p class="head-note">Independent digital studio<br>Aotearoa, New Zealand</p>
+
+    <nav class="desktop-nav" aria-label="Primary navigation">
+      <a href="#work">Work</a>
+      <a href="#nest">Nest</a>
+      <a href="#lab">Lab</a>
+      <a href="#studio">Studio</a>
+      <a href="#contact">Contact</a>
+    </nav>
+
+    <a class="availability" href="#contact"><i></i> Taking on one new project</a>
+    <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="mobileMenu">
+      <span>Menu</span><i></i>
+    </button>
+  </header>
+
+  <nav class="mobile-menu" id="mobileMenu" aria-label="Mobile navigation">
+    <a href="#work"><small>01</small>Work</a>
+    <a href="#nest"><small>02</small>Nest</a>
+    <a href="#lab"><small>03</small>Lab</a>
+    <a href="#studio"><small>04</small>Studio</a>
+    <a href="#contact"><small>05</small>Contact</a>
+  </nav>
+
+  <aside class="section-rail" aria-label="Page sections">
+    <p><span id="sectionNumber">00</span> / <span id="sectionName">Index</span></p>
+    <div class="section-rail__track"><i id="scrollProgress"></i></div>
+    <span class="section-rail__percent" id="scrollPercent">00%</span>
+  </aside>
+
+  <main id="top">
+    <section class="hero tracked-section" data-section="Index" data-number="00">
+      <div class="hero__stamp reveal">
+        <span>Design</span><span>Code</span><span>Motion</span>
+      </div>
+
+      <h1 class="hero__title" aria-label="Ideas that refuse to sit still">
+        <span class="hero-line hero-line--one reveal">Ideas that</span>
+        <span class="hero-line hero-line--two reveal">refuse to</span>
+        <span class="hero-line hero-line--three reveal"><em>sit still.</em></span>
+      </h1>
+
+      <div class="hero__foot reveal">
+        <p>Websites, identities and interactive systems with a pulse. Designed and built by one person, so the original idea survives all the way to launch.</p>
+        <a class="arrow-link" href="#work"><span>Enter the work</span><i aria-hidden="true">↘</i></a>
+      </div>
+
+      <div class="hero__coordinates" aria-hidden="true">
+        <span>45.0312° S</span>
+        <span>168.6626° E</span>
+      </div>
+    </section>
+
+    <div class="signal-strip" aria-label="Studio capabilities">
+      <div class="signal-strip__run">
+        <span>Web design & development</span><i>✦</i>
+        <span>Brand systems</span><i>✦</i>
+        <span>Generative art</span><i>✦</i>
+        <span>Interactive installations</span><i>✦</i>
+        <span>Web design & development</span><i>✦</i>
+        <span>Brand systems</span><i>✦</i>
+        <span>Generative art</span><i>✦</i>
+        <span>Interactive installations</span><i>✦</i>
+      </div>
+    </div>
+
+    <section class="work-intro tracked-section" id="work" data-section="Selected work" data-number="01">
+      <div class="eyebrow reveal"><span>01</span><p>Selected work<br>Real things, running now</p></div>
+      <div class="work-intro__copy">
+        <h2 class="display-title reveal">Not a portfolio<br><em>of promises.</em></h2>
+        <p class="reveal">Every project below is made, shipped, and doing its job. The live sites are shown moving because the experience is the work—not a still frame of it.</p>
+      </div>
+    </section>
+
+    <section class="project project--love tracked-section" id="project-love" data-section="Love 432 Records" data-number="01" aria-labelledby="love-title">
+      <header class="project__info reveal">
+        <div>
+          <p class="project__kind">Web / Identity / Catalogue</p>
+          <h3 id="love-title">Love 432<br>Records</h3>
+        </div>
+        <div class="project__description">
+          <p>An independent record-label home with a living Chladni field behind the catalogue. One release, many storefronts, and no generic shop-template feeling.</p>
+          <ul><li>WebGL</li><li>TypeScript</li><li>System design</li></ul>
+        </div>
+      </header>
+      <div class="project__frame reveal" data-glass data-foliage-solid>
+        <video src="media/love432-scroll-smooth.mp4" poster="media/love432.jpg" muted loop playsinline preload="metadata"></video>
+        <div class="project__wash"></div>
+        <span class="project__index">01 / 04</span>
+        <a class="project__open" href="https://www.love432.com/test" target="_blank" rel="noopener noreferrer" aria-label="Visit Love 432 Records">
+          <span>Visit live site</span><i>↗</i>
+        </a>
+      </div>
+    </section>
+
+    <section class="project project--villa tracked-section" id="project-villa" data-section="Villa 25 Ekas" data-number="02" aria-labelledby="villa-title">
+      <header class="project__info reveal">
+        <div>
+          <p class="project__kind">Web / Hospitality / Live data</p>
+          <h3 id="villa-title">Villa 25<br>Ekas</h3>
+        </div>
+        <div class="project__description">
+          <p>A black-and-gold digital home for a surf villa in Lombok, with a live marine forecast that makes the most important local information feel native to the brand.</p>
+          <ul><li>Art direction</li><li>Forecast API</li><li>Brand</li></ul>
+        </div>
+      </header>
+      <div class="project__frame reveal" data-glass data-foliage-solid>
+        <video src="media/villa25-scroll-smooth.mp4" poster="media/villa25.jpg" muted loop playsinline preload="metadata"></video>
+        <div class="project__wash"></div>
+        <span class="project__index">02 / 04</span>
+        <a class="project__open" href="https://villa25ekas.com/demo/?key=acid1234" target="_blank" rel="noopener noreferrer" aria-label="Visit Villa 25 Ekas">
+          <span>Visit live site</span><i>↗</i>
+        </a>
+      </div>
+    </section>
+
+    <section class="project project--goldy tracked-section" id="project-goldy" data-section="Goldy Hand Poked" data-number="03" aria-labelledby="goldy-title">
+      <header class="project__info reveal">
+        <div>
+          <p class="project__kind">Web / Artist / Booking</p>
+          <h3 id="goldy-title">Goldy<br>Hand Poked</h3>
+        </div>
+        <div class="project__description">
+          <p>A quiet, tactile site for a hand-poke tattoo artist near Wānaka—warm paper, drawn knotwork and a booking path made for a small number of unhurried sittings.</p>
+          <ul><li>Three.js</li><li>Art direction</li><li>Static build</li></ul>
+        </div>
+      </header>
+      <div class="project__frame reveal" data-glass data-foliage-solid>
+        <video src="media/goldy-scroll-smooth.mp4" poster="media/goldy.jpg" muted loop playsinline preload="metadata"></video>
+        <div class="project__wash"></div>
+        <span class="project__index">03 / 04</span>
+        <a class="project__open" href="https://milkysbeta.github.io/goldyhandpoked/" target="_blank" rel="noopener noreferrer" aria-label="Visit Goldy Hand Poked">
+          <span>Visit live site</span><i>↗</i>
+        </a>
+      </div>
+    </section>
+
+    <section class="graphic-design tracked-section" id="graphic-design" data-section="Graphic design" data-number="04" aria-labelledby="graphic-design-title">
+      <header class="graphic-design__head">
+        <div class="eyebrow reveal"><span>04</span><p>Graphic design<br>Selected archive</p></div>
+        <h2 class="display-title reveal" id="graphic-design-title">Graphic<br><em>design.</em></h2>
+        <p class="graphic-design__lede reveal">Identity, typography, image-making and print—visual systems with enough character to work across posters, records, campaigns and physical spaces.</p>
+      </header>
+
+      <div class="graphic-design__gallery">
+        <div class="graphic-design__poster-intro reveal">
+          <span>Event work / 01—05</span>
+          <strong>Gig posters &amp;<br>event graphics</strong>
+        </div>
+
+        <div class="graphic-design__posters">
+          <figure class="poster-piece poster-piece--andrometer reveal">
+            <div class="poster-piece__media" data-glass data-foliage-solid><img src="media/andrometer.jpg" alt="Andrometer 2.2 and Djebali event artwork" loading="lazy" decoding="async"></div>
+            <figcaption><span>01 / Artwork + promotion</span><strong>Andrometer 2.2<br>/ Djebali</strong><p>Custom type and composite image-making carrying one high-impact event campaign.</p></figcaption>
+          </figure>
+          <figure class="poster-piece reveal">
+            <div class="poster-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/remeday.webp" alt="Remeday botanical event poster" loading="lazy" decoding="async"></div>
+            <figcaption><span>02 / Event identity</span><strong>Remeday</strong><p>A botanical event identity balancing organic imagery with a direct promotional hierarchy.</p></figcaption>
+          </figure>
+          <figure class="poster-piece reveal">
+            <div class="poster-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/winter-souls.webp" alt="Winter Souls electronic music event poster" loading="lazy" decoding="async"></div>
+            <figcaption><span>03 / Poster + image-making</span><strong>Winter Souls</strong><p>Atmospheric image-making and type composed for electronic music at poster scale.</p></figcaption>
+          </figure>
+          <figure class="poster-piece reveal">
+            <div class="poster-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/shipwrecked-wifi.webp" alt="Shipwrecked WiFi information poster and QR code" loading="lazy" decoding="async"></div>
+            <figcaption><span>05 / Environmental graphic</span><strong>Shipwrecked WiFi</strong><p>A practical information poster made specific to its place through character and imagery.</p></figcaption>
+          </figure>
+        </div>
+
+        <div class="graphic-design__poster-intro graphic-design__poster-intro--studies reveal" id="visual-studies">
+          <span>Identity + image-making / 04—08</span>
+          <strong>Marks, objects &amp;<br>visual studies</strong>
+        </div>
+
+        <div class="graphic-design__studies">
+          <figure class="graphic-piece graphic-piece--infinity reveal">
+            <div class="graphic-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/infinity-mirror.webp" alt="Infinity Mirror illuminated artwork concept" loading="lazy" decoding="async"></div>
+            <figcaption><span>04 / Object artwork</span><strong>Infinity Mirror</strong></figcaption>
+          </figure>
+          <figure class="graphic-piece graphic-piece--milky reveal">
+            <div class="graphic-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/milky-sticker.webp" alt="Red and white Milky carton sticker mark" loading="lazy" decoding="async"></div>
+            <figcaption><span>06 / Identity mark</span><strong>Milky Sticker</strong></figcaption>
+          </figure>
+          <figure class="graphic-piece graphic-piece--optical reveal">
+            <div class="graphic-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/optical-hex.webp" alt="Black and white radiating hexagonal optical graphic" loading="lazy" decoding="async"></div>
+            <figcaption><span>07 / Generative study</span><strong>Hex Field</strong></figcaption>
+          </figure>
+          <figure class="graphic-piece graphic-piece--love reveal">
+            <div class="graphic-piece__media" data-glass data-foliage-solid><img src="media/graphic-design/love-gold-fur.webp" alt="Blue fur and gold dimensional Love symbol" loading="lazy" decoding="async"></div>
+            <figcaption><span>08 / Brand exploration</span><strong>Love Gold Fur</strong></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="nest tracked-section" id="nest" data-section="The Nest" data-number="05" aria-labelledby="nest-title">
+      <header class="nest__head">
+        <div class="eyebrow reveal"><span>05</span><p>Recent work<br>A personal creative system</p></div>
+        <h2 class="display-title reveal" id="nest-title">Building<br><em>The Nest.</em></h2>
+        <p class="nest__lede reveal">My latest work is less a single product than a connected place for everything I make: projects, unfinished ideas, music, tools and the paths between them.</p>
+      </header>
+
+      <div class="nest__feature nest__feature--projects reveal" data-glass data-foliage-solid>
+        <div class="nest__screen"><img src="media/nest/project-hub.png" alt="Project Hub showing Milky's searchable archive of creative projects" loading="lazy" decoding="async"></div>
+        <div class="nest__copy">
+          <span>01 / Archive + launcher</span>
+          <h3>Project Hub</h3>
+          <p>A living index of more than one hundred projects. It finds work across my drives, makes it visual and searchable, and brings old experiments back into reach instead of letting them disappear into folders.</p>
+          <small>Local tools / Project memory / Search / Launch</small>
+        </div>
+      </div>
+
+      <div class="nest__feature nest__feature--music reveal" data-glass data-foliage-solid>
+        <div class="nest__screen"><img src="media/nest/music-hub.png" alt="Music Hub showing Ableton projects, versions, metadata and listening controls" loading="lazy" decoding="async"></div>
+        <div class="nest__copy">
+          <span>02 / Music archive</span>
+          <h3>Music Hub</h3>
+          <p>An interface for years of Ableton sets and loose song ideas—grouping versions, bounces, stems, moods and time spent so the archive becomes something I can actually listen to and work from.</p>
+          <small>Ableton metadata / Audio / Archive / Publishing</small>
+        </div>
+      </div>
+
+      <article class="nest__dock reveal" data-glass data-foliage-solid>
+        <div class="nest__dock-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div>
+          <span>03 / Desktop access layer</span>
+          <h3>Project Dock</h3>
+          <p>A small Windows dock that keeps the whole system one click away. Together, the Hub, Music Hub and Dock form the beginnings of The Nest: a home-grown operating layer for creative life.</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="lab tracked-section" id="lab" data-section="Playable lab" data-number="06">
+      <div class="lab__head">
+        <div class="eyebrow reveal"><span>06</span><p>Playable lab<br>Experiments with controls</p></div>
+        <h2 class="display-title reveal">Images are fine.<br><em>Instruments are better.</em></h2>
+        <p class="lab__lede reveal">These are small visual machines. Open one and change the outcome yourself—nothing below is a prerecorded trick.</p>
+      </div>
+
+      <div class="instrument-grid">
+        <article class="instrument-card reveal" data-glass data-foliage-solid data-launch="live/pattern-engine/index.html" data-title="MONO Pattern Engine" role="button" tabindex="0">
+          <div class="instrument-card__stage" aria-hidden="true"><iframe src="live/pattern-engine/index.html" loading="lazy" title=""></iframe></div>
+          <div class="instrument-card__copy"><span>01 / Generative instrument / WebGL2</span><h3>MONO Pattern Engine</h3><p>A live image-making system for blending fields, type, texture and optical interference into repeatable graphic structures.</p><i>Open instrument ↗</i></div>
+        </article>
+        <article class="instrument-card reveal" data-glass data-foliage-solid data-launch="live/rose-curve/index.html" data-title="Rose Curve" role="button" tabindex="0">
+          <div class="instrument-card__stage" aria-hidden="true"><iframe src="live/rose-curve/index.html" loading="lazy" title=""></iframe></div>
+          <div class="instrument-card__copy"><span>02 / Canvas / mathematics</span><h3>Rose Curve</h3><p>A responsive drawing instrument that turns mathematical curves and hand movement into changing ornamental forms.</p><i>Open instrument ↗</i></div>
+        </article>
+        <article class="instrument-card reveal" data-glass data-foliage-solid data-launch="live/moire/index.html" data-title="Moiré Generator" role="button" tabindex="0">
+          <div class="instrument-card__stage" aria-hidden="true"><iframe src="live/moire/index.html" loading="lazy" title=""></iframe></div>
+          <div class="instrument-card__copy"><span>03 / Optical systems / print</span><h3>Moiré Generator</h3><p>A playable interference-pattern tool for shaping line density, movement and print-ready optical compositions.</p><i>Open instrument ↗</i></div>
+        </article>
+      </div>
+
+      <div class="lab-grid lab-grid--single">
+        <article class="gpk reveal" data-glass data-foliage-solid>
+          <div class="gpk__wall" aria-hidden="true">
+            <img src="media/gpk/card-01.jpg" alt=""><img src="media/gpk/card-02.jpg" alt=""><img src="media/gpk/card-03.jpg" alt=""><img src="media/gpk/card-04.jpg" alt=""><img src="media/gpk/card-05.jpg" alt=""><img src="media/gpk/card-06.jpg" alt=""><img src="media/gpk/card-07.jpg" alt=""><img src="media/gpk/card-08.jpg" alt="">
+          </div>
+          <div class="gpk__copy">
+            <span>AI / Kiosk / Character system</span>
+            <h3>Garbage Pail<br>Kids Generator</h3>
+            <p>A one-button arcade machine: custom image model, automated naming, and a new trading card in roughly forty seconds.</p>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="studio tracked-section" id="studio" data-section="The studio" data-number="07">
+      <div class="eyebrow reveal"><span>07</span><p>The studio<br>Small by design</p></div>
+
+      <div class="studio__statement">
+        <h2 class="reveal">One mind from the first sketch to the final line of code.</h2>
+        <p class="reveal">I’m Milky, an Aotearoa-based designer, developer and music-maker. I started in graphic design and event artwork, then followed the work into websites, generative systems, AI image-making, custom desktop tools and physical installations. I like making the idea, the interface and the machinery underneath it feel like one thing.</p>
+      </div>
+
+      <div class="disciplines" data-glass>
+        <article class="discipline reveal"><span>01</span><h3>Digital homes</h3><p>Distinctive sites, catalogues and tools—designed, written, coded and launched as one system.</p><small>Web design / Development / CMS / Performance</small></article>
+        <article class="discipline reveal"><span>02</span><h3>Visual identities</h3><p>Identity that survives contact with screens, print, packaging, vinyl, signage and real rooms.</p><small>Brand / Type / Print / Production art</small></article>
+        <article class="discipline reveal"><span>03</span><h3>Living systems</h3><p>Generative graphics and interaction that respond to a body, a sound, live data or a changing context.</p><small>Three.js / GLSL / TouchDesigner / Sensors</small></article>
+      </div>
+
+      <div class="process">
+        <div class="process__head reveal"><span>How it moves</span><p>A clear route through uncertain territory.</p></div>
+        <ol>
+          <li class="reveal"><span>01</span><strong>Find the signal</strong><p>Get to the one idea the project cannot afford to lose.</p></li>
+          <li class="reveal"><span>02</span><strong>Make it visible</strong><p>Build the identity, type, motion and interaction around that signal.</p></li>
+          <li class="reveal"><span>03</span><strong>Make it real</strong><p>Code it, test it on the real surface, launch it, and hand over something usable.</p></li>
+        </ol>
+      </div>
+
+    </section>
+
+    <section class="contact tracked-section" id="contact" data-section="Contact" data-number="08">
+      <div class="contact__top">
+        <span class="reveal">08 / Contact</span>
+        <p class="reveal">Based in Aotearoa<br>Working anywhere</p>
+      </div>
+      <h2 class="contact__title reveal">Have something<br><em>worth making?</em></h2>
+      <div class="contact__inquiry">
+        <div class="contact__intro reveal">
+          <p>Tell me what it is, where it needs to live, and roughly when you need it. You’ll get a straight answer from the person who would actually make it.</p>
+          <a href="mailto:milkysbeta@gmail.com?subject=Project%20enquiry">milkysbeta@gmail.com <i>↗</i></a>
+          <a class="contact__whatsapp" id="whatsappLink" href="#" hidden>Message on WhatsApp <i>↗</i></a>
+        </div>
+        <form class="inquiry-form reveal" id="inquiryForm" action="mailto:milkysbeta@gmail.com" method="post" enctype="text/plain" data-email="milkysbeta@gmail.com">
+          <div class="inquiry-form__pair">
+            <label><span>Your name</span><input name="name" type="text" autocomplete="name" required></label>
+            <label><span>Your email</span><input name="email" type="email" autocomplete="email" required></label>
+          </div>
+          <label><span>What are we making?</span>
+            <select name="project">
+              <option value="A website or digital home">A website or digital home</option>
+              <option value="Graphic design or identity">Graphic design or identity</option>
+              <option value="An interactive or experimental project">An interactive or experimental project</option>
+              <option value="Something else">Something else</option>
+            </select>
+          </label>
+          <label><span>Tell me a little about it</span><textarea name="message" rows="6" required placeholder="The idea, where it needs to live, and any useful timing…"></textarea></label>
+          <div class="inquiry-form__footer">
+            <p id="inquiryStatus" aria-live="polite">Nothing is uploaded or stored here—this opens your email app with the details ready to send.</p>
+            <button type="submit">Prepare enquiry <i>↗</i></button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>MILKY® / Digital design studio</span>
+    <span>© <span id="year">2026</span></span>
+    <button class="atmosphere" id="atmosphere" type="button" aria-pressed="true"><i></i><span>Atmosphere on</span></button>
+  </footer>
+
+  <dialog class="play-dialog" id="playDialog">
+    <div class="play-dialog__bar">
+      <p><span>Live instrument</span><strong id="playTitle">Experiment</strong></p>
+      <div>
+        <a id="playExternal" href="#" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
+        <button id="playClose" type="button" aria-label="Close experiment">Close ×</button>
+      </div>
+    </div>
+    <div class="play-dialog__stage" id="playStage"></div>
+  </dialog>
+
+  <script type="module" src="js/site.js?v=nest-enquiry-1"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local capture and verification helpers keep machine-specific browser paths.
+tools/capture-*.js
+tools/process-*.js
+tools/qa-*.js
+tools/*.png
+
+# Superseded source captures retained locally, but not shipped to the website.
+media/*-scroll.mp4
+media/jelly-*
+media/shipwrecked.jpg

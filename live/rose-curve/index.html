@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rose Curve Rings</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#000;font-family:'Segoe UI',system-ui,sans-serif;color:#ddd}
+canvas{display:block;position:fixed;top:0;left:0}
+#c-cpu{display:none}
+#panel-toggle{
+  position:fixed;top:12px;right:12px;z-index:20;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+  color:#ccc;font-size:18px;width:36px;height:36px;border-radius:8px;
+  cursor:pointer;backdrop-filter:blur(6px);transition:.2s;display:flex;align-items:center;justify-content:center;
+}
+#panel-toggle:hover{background:rgba(255,255,255,.15)}
+#panel{
+  position:fixed;top:0;right:0;width:340px;height:100vh;z-index:10;
+  background:rgba(10,10,18,.88);backdrop-filter:blur(18px);
+  border-left:1px solid rgba(255,255,255,.08);
+  overflow-y:auto;padding:52px 16px 24px;
+  transform:translateX(0);transition:transform .3s ease;
+}
+#panel.collapsed{transform:translateX(100%)}
+#panel h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#888;margin:16px 0 5px;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:3px}
+#panel h2:first-child{margin-top:0}
+.ctrl{display:flex;align-items:center;margin:3px 0}
+.ctrl label{font-size:10px;white-space:nowrap;min-width:76px;color:#aaa}
+.ctrl input[type=range]{flex:1;margin:0 5px;accent-color:#6af;height:14px}
+.ctrl .val{font-size:9px;min-width:30px;text-align:right;color:#8af;font-variant-numeric:tabular-nums}
+.ctrl select{flex:1;margin:0 5px;background:#1a1a2e;border:1px solid rgba(255,255,255,.18);color:#eee;font-size:10px;padding:3px 6px;border-radius:3px;outline:none;appearance:auto;cursor:pointer}
+.ctrl select option{background:#1a1a2e;color:#eee;padding:4px}
+.ring-section{border:1px solid rgba(255,255,255,.06);border-radius:6px;margin:5px 0;background:rgba(255,255,255,.02);overflow:hidden}
+.ring-header{display:flex;align-items:center;gap:6px;padding:6px 8px;cursor:pointer;user-select:none}
+.ring-header:hover{background:rgba(255,255,255,.03)}
+.ring-header input[type=checkbox]{accent-color:#6af;width:13px;height:13px;cursor:pointer}
+.ring-header span{font-size:11px;font-weight:600;flex:1}
+.ring-header .arrow{font-size:10px;color:#666;transition:transform .2s}
+.ring-header input[type=color]{width:26px;height:18px;border:none;background:none;cursor:pointer;padding:0}
+.ring-body{padding:2px 8px 6px;display:block}
+.ring-section.rc .ring-body{display:none}
+.ring-section.rc .arrow{transform:rotate(-90deg)}
+.speed-snaps{display:flex;flex-wrap:wrap;gap:3px;margin:2px 0 4px}
+.speed-snaps button{
+  font-size:9px;padding:2px 5px;border:1px solid rgba(255,255,255,.12);border-radius:3px;
+  background:rgba(255,255,255,.04);color:#aaa;cursor:pointer;transition:.15s;
+}
+.speed-snaps button:hover{background:rgba(255,255,255,.1);color:#fff}
+.speed-snaps button.active{background:rgba(100,170,255,.2);border-color:#6af;color:#6af}
+.rev-btn{
+  font-size:9px;padding:2px 8px;border:1px solid rgba(255,255,255,.12);border-radius:3px;
+  background:rgba(255,255,255,.04);color:#aaa;cursor:pointer;transition:.15s;margin:2px 0 4px;
+}
+.rev-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+.rev-btn.active{background:rgba(255,100,100,.2);border-color:#f66;color:#f66}
+.gradient-pickers{display:flex;gap:3px;margin:2px 0}
+.gradient-pickers input[type=color]{flex:1;height:20px;border:none;background:none;cursor:pointer;padding:0}
+.grad-preview{height:8px;border-radius:2px;margin:1px 0 3px;border:1px solid rgba(255,255,255,.08)}
+.ring-color-row{display:none}
+#gpu-info{font-size:9px;color:#555;margin:2px 0 0;word-break:break-all;line-height:1.3}
+#fps{position:fixed;bottom:8px;left:8px;font-size:11px;color:#555;z-index:5}
+#logo{text-align:center;margin-top:20px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}
+#math-toggle{position:fixed;bottom:8px;right:8px;z-index:20;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#555;font-size:10px;padding:4px 10px;border-radius:4px;cursor:pointer;backdrop-filter:blur(6px);font-family:'Courier New',monospace}
+#math-toggle:hover{color:#888;background:rgba(255,255,255,.1)}
+#math-panel{position:fixed;bottom:36px;left:12px;max-width:480px;z-index:5;background:rgba(10,10,18,.75);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:12px 16px;font-family:'Courier New',monospace;color:#556;line-height:1.6;transition:opacity .3s,transform .3s}
+#math-panel.hidden{opacity:0;pointer-events:none;transform:translateY(10px)}
+#math-panel .formula{white-space:pre;font-size:11px;color:#667}
+#math-panel .values{font-size:10px;color:#556;margin-top:6px}
+#math-panel .curve-name{color:#78a;font-size:12px;font-weight:600;margin-bottom:4px}
+.state-btns{display:flex;gap:6px;margin:8px 0}
+.state-btns button{flex:1;font-size:10px;padding:5px 0;border:1px solid rgba(255,255,255,.12);border-radius:4px;background:rgba(255,255,255,.05);color:#aaa;cursor:pointer;transition:.15s}
+.state-btns button:hover{background:rgba(255,255,255,.12);color:#fff}
+.state-btns button.accent{border-color:rgba(100,170,255,.3);color:#6af}
+.state-btns button.accent:hover{background:rgba(100,170,255,.15)}
+.k-snaps{display:flex;flex-wrap:wrap;gap:3px;margin:2px 0 4px}
+.k-snaps button{font-size:9px;padding:2px 5px;border:1px solid rgba(255,255,255,.12);border-radius:3px;background:rgba(255,255,255,.04);color:#aaa;cursor:pointer;transition:.15s}
+.k-snaps button:hover{background:rgba(255,255,255,.1);color:#fff}
+.k-snaps button.active{background:rgba(100,170,255,.2);border-color:#6af;color:#6af}
+#eq-display{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:5;
+  font-family:'Georgia','Times New Roman',serif;font-size:19px;letter-spacing:.5px;
+  font-weight:600;font-style:italic;
+  color:rgba(255,255,255,.28);white-space:nowrap;pointer-events:none;
+  text-align:center;line-height:1.5;transition:opacity .3s;
+  text-shadow:0 0 12px rgba(100,160,255,.06);
+}
+#eq-display .eq-line{display:block}
+#eq-display .eq-meta{
+  font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;font-style:normal;font-weight:400;
+  letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.16);margin-top:2px;
+}
+#eq-display .eq-meta .eq-num{font-size:11px;color:rgba(160,200,255,.25)}
+#eq-display .fn-sin{color:rgba(230,140,190,.55);font-weight:700}
+#eq-display .fn-cos{color:rgba(130,180,240,.55);font-weight:700}
+#eq-display .fn-tan{color:rgba(190,210,130,.55);font-weight:700}
+#eq-display .eq-paren{color:rgba(255,255,255,.18);font-weight:400}
+#eq-display .eq-op{color:rgba(255,255,255,.22);font-weight:400}
+#eq-display .eq-var{color:rgba(255,255,255,.34)}
+#eq-display .eq-num{color:rgba(160,200,255,.38)}
+#eq-display .eq-frac{font-size:14px;vertical-align:super;color:rgba(160,200,255,.35)}
+#eq-display .eq-sub{font-size:13px;vertical-align:sub;color:rgba(255,255,255,.22)}
+</style>
+</head>
+<body>
+<canvas id="c-gpu"></canvas>
+<canvas id="c-cpu"></canvas>
+<div id="fps"></div>
+
+<button id="panel-toggle" title="Toggle Controls">&#9881;</button>
+<div id="panel">
+  <h2>Curve</h2>
+  <div class="ctrl"><label>Curve Type</label><select id="curveType">
+    <option value="0" selected>Rose Curve</option>
+    <option value="1">Hypocycloid</option>
+    <option value="2">Epicycloid</option>
+    <option value="3">Spirograph</option>
+    <option value="4">Lissajous</option>
+    <option value="5">Polar Sine</option>
+  </select></div>
+
+  <h2>Motion</h2>
+    <div class="ctrl"><label>Speed</label><input type="range" id="speed" min="0.1" max="3" step="0.01" value="1"><span class="val" data-for="speed"></span></div>
+    <div class="ctrl"><label>Zoom</label><input type="range" id="zoom" min="0.5" max="2.5" step="0.01" value="1"><span class="val" data-for="zoom"></span></div>
+  <div class="ctrl"><label>Trail Length</label><input type="range" id="trail" min="0.001" max="0.15" step="0.001" value="0.02"><span class="val" data-for="trail"></span></div>
+  <div class="ctrl"><label>Motion Blur</label><input type="range" id="motionBlur" min="0" max="16" step="1" value="1"><span class="val" data-for="motionBlur"></span></div>
+
+  <h2>3D Rotation (Mouse)</h2>
+  <div class="ctrl"><label>Mouse Tilt</label><input type="range" id="tilt" min="0" max="1.2" step="0.01" value="0"><span class="val" data-for="tilt"></span></div>
+  <div class="ctrl"><label>Perspective</label><input type="range" id="perspective" min="1" max="6" step="0.1" value="2.5"><span class="val" data-for="perspective"></span></div>
+
+  <h2>Effects</h2>
+  <div class="ctrl"><label>Intensity</label><input type="range" id="intensity" min="0" max="4" step="0.01" value="1"><span class="val" data-for="intensity"></span></div>
+  <div class="ctrl"><label>RGB Shift</label><input type="range" id="rgbShift" min="0" max="0.3" step="0.001" value="0"><span class="val" data-for="rgbShift"></span></div>
+  <div class="ctrl"><label>Glow Halo</label><input type="range" id="glow" min="0" max="4" step="0.01" value="0"><span class="val" data-for="glow"></span></div>
+  <div class="ctrl"><label>Bloom</label><input type="range" id="bloom" min="0" max="1" step="0.01" value="0"><span class="val" data-for="bloom"></span></div>
+  <div class="ctrl"><label>Vignette</label><input type="range" id="vignette" min="0" max="1.5" step="0.01" value="0"><span class="val" data-for="vignette"></span></div>
+
+  <h2>Tracer Path</h2>
+  <div class="ctrl"><label>Path Opacity</label><input type="range" id="tracerOpacity" min="0" max="1" step="0.01" value="0"><span class="val" data-for="tracerOpacity"></span></div>
+  <div class="ctrl"><label>Path Width</label><input type="range" id="tracerWidth" min="0.5" max="5" step="0.1" value="1.5"><span class="val" data-for="tracerWidth"></span></div>
+  <div class="ctrl"><label>Fade Length</label><input type="range" id="tracerFade" min="0" max="8" step="0.1" value="3"><span class="val" data-for="tracerFade"></span></div>
+  <div class="ctrl"><label>Blend Mode</label><select id="blendMode">
+    <option value="0" selected>Normal</option>
+    <option value="1">Screen</option>
+    <option value="2">Add</option>
+    <option value="3">Multiply</option>
+    <option value="4">Overlay</option>
+    <option value="5">Difference</option>
+    <option value="6">Exclusion</option>
+    <option value="7">Color Dodge</option>
+    <option value="8">Soft Light</option>
+  </select></div>
+
+  <h2>Post FX</h2>
+  <div class="ctrl"><label>Post Effect</label><select id="postFX">
+    <option value="0" selected>None</option>
+    <option value="1">Invert</option>
+    <option value="2">Neon Edge</option>
+    <option value="3">Color Rotate</option>
+    <option value="4">Solarize</option>
+    <option value="5">Thermal</option>
+    <option value="6">Hue Shift</option>
+    <option value="7">Posterize</option>
+    <option value="8">Acid</option>
+  </select></div>
+  <div class="ctrl"><label>FX Amount</label><input type="range" id="postFXAmt" min="0" max="1" step="0.01" value="1"><span class="val" data-for="postFXAmt"></span></div>
+
+  <h2>Rings</h2>
+  <div class="state-btns">
+    <button id="btn-save" class="accent" title="Save to localStorage">&#128190; Save</button>
+    <button id="btn-load" class="accent" title="Load from localStorage">&#128194; Load</button>
+    <button id="btn-random" title="Randomize everything">&#127922; Random</button>
+  </div>
+  <div id="rings-container"></div>
+
+  <h2>Renderer</h2>
+  <div class="ctrl"><label>Engine</label><select id="renderer"><option value="gpu" selected>GPU (WebGL)</option><option value="cpu">CPU (Canvas 2D)</option></select></div>
+  <div id="gpu-info"></div>
+
+  <div id="logo">
+    <img src="moire-logo.png" alt="Milky" style="width:80px;opacity:.85">
+  </div>
+</div>
+
+<div id="eq-display"></div>
+
+<button id="math-toggle">f(θ)</button>
+<div id="math-panel" class="hidden">
+  <div class="curve-name" id="math-curve-name">Rose Curve</div>
+  <div class="formula" id="math-formula"></div>
+  <div class="values" id="math-values"></div>
+</div>
+
+<script>
+(() => {
+const PI = Math.PI;
+const gpuCanvas = document.getElementById('c-gpu');
+const cpuCanvas = document.getElementById('c-cpu');
+
+function C(id) { return document.getElementById(id); }
+function V(id) { return parseFloat(C(id).value); }
+function B(id) { return C(id).checked ? 1.0 : 0.0; }
+function hexToVec3(hex) {
+    return [parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255];
+}
+function hsvToRgb(h, s, v) {
+    h = ((h % 1) + 1) % 1;
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: return [v,t,p]; case 1: return [q,v,p]; case 2: return [p,v,t];
+        case 3: return [p,q,v]; case 4: return [t,p,v]; case 5: return [v,p,q];
+    }
+}
+function sampleGradient(t, stops) {
+    t = ((t % 1) + 1) % 1;
+    const n = stops.length;
+    const sc = t * (n - 1);
+    const idx = Math.floor(sc);
+    const f = sc - idx;
+    const a = stops[Math.min(idx, n - 1)];
+    const b = stops[Math.min(idx + 1, n - 1)];
+    return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+function tilt3DJS(px, py, mouseX, mouseY, tiltAmt, persp, eH, eV) {
+    const rotY = mouseX * tiltAmt + eH;
+    const rotX = -mouseY * tiltAmt + eV;
+    let x = px, y = py, z = 0;
+    const cy = Math.cos(rotY), sy = Math.sin(rotY);
+    let nx = x*cy + z*sy, nz = -x*sy + z*cy;
+    x = nx; z = nz;
+    const cx = Math.cos(rotX), sx = Math.sin(rotX);
+    let ny = y*cx - z*sx, nz2 = y*sx + z*cx;
+    y = ny; z = nz2;
+    const w = persp / (persp + z);
+    return [x * w, y * w];
+}
+
+/* ── Ring config ─────────────────────────────── */
+const RING_DEFAULTS = [
+    { k: '1/2', balls: 2,  scale: 0.35, color: '#ffaa22' },
+    { k: '3/2', balls: 6,  scale: 0.35, color: '#ff3388' },
+    { k: '5/2', balls: 10, scale: 0.35, color: '#33ddcc' },
+    { k: '7/2', balls: 14, scale: 0.35, color: '#4488ff' },
+    { k: '9/2', balls: 18, scale: 0.35, color: '#bb66ff' },
+];
+const KS = [0.5, 1.5, 2.5, 3.5, 4.5];
+const BASE_SPEEDS = [0.80, 0.60, 0.45, 0.35, 0.28];
+const BRIGHTNESSES = [2.50, 1.80, 1.30, 1.00, 0.80];
+const PERIOD = 4 * PI;
+const SPEED_SNAPS = [
+    { label: '3x', val: 3 }, { label: '2x', val: 2 }, { label: '1x', val: 1 },
+    { label: '2/3', val: 2/3 }, { label: '1/2', val: 0.5 }, { label: '1/3', val: 1/3 },
+    { label: '1/4', val: 0.25 }, { label: '1/5', val: 0.2 }, { label: '1/8', val: 0.125 }, { label: '1/10', val: 0.1 },
+];
+
+function curvePointJS(k, theta, ct) {
+    if (ct === 0) { const r = Math.cos(k*theta); return [r*Math.cos(theta), r*Math.sin(theta)]; }
+    if (ct === 1) { const n=k*2+2, a=1/n; return [(1-a)*Math.cos(theta)+a*Math.cos((n-1)*theta),(1-a)*Math.sin(theta)-a*Math.sin((n-1)*theta)]; }
+    if (ct === 2) { const n=k*2+1, inv=1/(n+2), np1=n+1; return [np1*inv*Math.cos(theta)-inv*Math.cos(np1*theta),np1*inv*Math.sin(theta)-inv*Math.sin(np1*theta)]; }
+    if (ct === 3) { const n=k*2+2.5, a=1/n, d=0.7*a; return [(1-a)*Math.cos(theta)+d*Math.cos((n-1)*theta),(1-a)*Math.sin(theta)-d*Math.sin((n-1)*theta)]; }
+    if (ct === 4) { return [Math.sin(k*theta+PI*0.5), Math.sin((k+1)*theta)]; }
+    const r = 0.5+0.5*Math.sin(k*theta); return [r*Math.cos(theta), r*Math.sin(theta)];
+}
+function getCurvePeriod(ct) { return (ct===1||ct===2||ct===4) ? 2*PI : 4*PI; }
+
+const accH = [0,0,0,0,0], accV = [0,0,0,0,0];
+let mx = 0, my = 0, smx = 0, smy = 0;
+let lastMs = 0, fpsFrames = 0, fpsTime = 0;
+const fpsEl = document.getElementById('fps');
+let activeRenderer = 'gpu';
+
+/* ── Generate ring panel HTML (per-ring color mode) ── */
+const ringsContainer = document.getElementById('rings-container');
+for (let i = 0; i < 5; i++) {
+    const d = RING_DEFAULTS[i];
+    ringsContainer.insertAdjacentHTML('beforeend', `
+    <div class="ring-section rc" id="rs${i}">
+      <div class="ring-header"><input type="checkbox" id="en${i}" ${i < 2 ? 'checked' : ''}><span id="rlbl${i}">Ring ${i+1} (k=${d.k})</span><span class="arrow">&#9662;</span><input type="color" id="col${i}" value="${d.color}"></div>
+      <div class="ring-body">
+        <div class="ctrl"><label>K Value</label><input type="range" id="kv${i}" min="0.1" max="8" step="0.1" value="${KS[i]}"><span class="val" data-for="kv${i}"></span></div>
+        <div class="k-snaps" data-kring="${i}">
+          <button data-val="0.5">1/2</button><button data-val="1">1</button><button data-val="1.5">3/2</button><button data-val="2">2</button><button data-val="2.5">5/2</button><button data-val="3">3</button><button data-val="3.5">7/2</button><button data-val="4">4</button><button data-val="4.5">9/2</button><button data-val="5">5</button><button data-val="6">6</button>
+        </div>
+        <div class="ctrl"><label>Color Mode</label><select id="cm${i}"><option value="0" selected>Static</option><option value="1">Hue Chase</option><option value="2">Gradient</option></select></div>
+        <div class="ctrl"><label>Color Speed</label><input type="range" id="cs${i}" min="0" max="2" step="0.01" value="0.3"><span class="val" data-for="cs${i}"></span></div>
+        <div class="ring-color-row" id="gr${i}">
+          <div class="grad-preview" id="gp${i}"></div>
+          <div class="gradient-pickers">
+            <input type="color" id="g${i}a" value="#ff0000">
+            <input type="color" id="g${i}b" value="#ffff00">
+            <input type="color" id="g${i}c" value="#00ff00">
+            <input type="color" id="g${i}d" value="#0088ff">
+            <input type="color" id="g${i}e" value="#ff00ff">
+          </div>
+        </div>
+        <div class="ctrl"><label>Balls</label><input type="range" id="bn${i}" min="1" max="32" step="1" value="${d.balls}"><span class="val" data-for="bn${i}"></span></div>
+        <div class="ctrl"><label>Scale</label><input type="range" id="sc${i}" min="0.02" max="0.5" step="0.005" value="${d.scale}"><span class="val" data-for="sc${i}"></span></div>
+        <div class="ctrl"><label>Speed Multi</label><input type="range" id="sm${i}" min="0.1" max="3" step="0.001" value="1"><span class="val" data-for="sm${i}"></span></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="speed-snaps" data-ring="${i}" style="flex:1">
+            ${SPEED_SNAPS.map(s => `<button data-val="${s.val}"${s.val===1?' class="active"':''}>${s.label}</button>`).join('')}
+          </div>
+          <button class="rev-btn" id="rev${i}" title="Reverse direction">&#8644; Rev</button>
+        </div>
+        <div class="ctrl"><label>H Rotation</label><input type="range" id="rh${i}" min="-3.14" max="3.14" step="0.01" value="0"><span class="val" data-for="rh${i}"></span></div>
+        <div class="ctrl"><label>H Spin Speed</label><input type="range" id="hs${i}" min="-2" max="2" step="0.01" value="0"><span class="val" data-for="hs${i}"></span></div>
+        <div class="ctrl"><label>V Rotation</label><input type="range" id="rv${i}" min="-3.14" max="3.14" step="0.01" value="0"><span class="val" data-for="rv${i}"></span></div>
+        <div class="ctrl"><label>V Spin Speed</label><input type="range" id="vs${i}" min="-2" max="2" step="0.01" value="0"><span class="val" data-for="vs${i}"></span></div>
+        <div class="ctrl"><label>Ring FX</label><select id="rfx${i}">
+          <option value="0" selected>None</option>
+          <option value="1">Invert</option>
+          <option value="2">Hue +120°</option>
+          <option value="3">Hue +240°</option>
+          <option value="4">Color Cycle</option>
+          <option value="5">Solarize</option>
+          <option value="6">Posterize</option>
+          <option value="7">Desaturate</option>
+          <option value="8">Oversaturate</option>
+          <option value="9">Neon Boost</option>
+          <option value="10">Thermal</option>
+          <option value="11">High Contrast</option>
+        </select></div>
+      </div>
+    </div>`);
+}
+
+/* ── Panel interactions ──────────────────────── */
+document.getElementById('panel-toggle').onclick = () => document.getElementById('panel').classList.toggle('collapsed');
+C('math-toggle').onclick = () => C('math-panel').classList.toggle('hidden');
+
+// K snap buttons
+document.querySelectorAll('.k-snaps').forEach(container => {
+    const i = container.dataset.kring;
+    function syncSnaps() {
+        const val = V('kv' + i);
+        container.querySelectorAll('button').forEach(b => b.classList.toggle('active', Math.abs(parseFloat(b.dataset.val) - val) < 0.05));
+        C('rlbl' + i).textContent = 'Ring ' + (parseInt(i)+1) + ' (k=' + val.toFixed(1) + ')';
+    }
+    container.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => { C('kv'+i).value = btn.dataset.val; C('kv'+i).dispatchEvent(new Event('input')); });
+    });
+    C('kv' + i).addEventListener('input', syncSnaps);
+    syncSnaps();
+});
+
+document.querySelectorAll('.ring-header').forEach(hdr => {
+    hdr.addEventListener('click', e => {
+        if (e.target.type === 'checkbox' || e.target.type === 'color') return;
+        hdr.closest('.ring-section').classList.toggle('rc');
+    });
+});
+
+document.querySelectorAll('.speed-snaps').forEach(container => {
+    const i = container.dataset.ring;
+    container.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const slider = C('sm' + i);
+            slider.value = btn.dataset.val;
+            slider.dispatchEvent(new Event('input'));
+            container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+    C('sm' + i).addEventListener('input', () => {
+        const val = V('sm' + i);
+        container.querySelectorAll('button').forEach(b => {
+            b.classList.toggle('active', Math.abs(parseFloat(b.dataset.val) - val) < 0.005);
+        });
+    });
+});
+
+// Reverse buttons
+for (let i = 0; i < 5; i++) {
+    C('rev' + i).addEventListener('click', () => C('rev' + i).classList.toggle('active'));
+}
+
+// Helper: get effective speed multiplier (accounts for reverse)
+function getSpeedMul(i) {
+    const v = V('sm' + i);
+    return C('rev' + i).classList.contains('active') ? -v : v;
+}
+
+// Val readouts
+document.querySelectorAll('.val[data-for]').forEach(el => {
+    const inp = C(el.dataset.for);
+    const update = () => {
+        const v = parseFloat(inp.value);
+        el.textContent = inp.step === '1' ? Math.round(v).toString() : v.toFixed(2);
+    };
+    inp.addEventListener('input', update); update();
+});
+
+// Per-ring color mode & gradient preview
+for (let i = 0; i < 5; i++) {
+    const sel = C('cm' + i);
+    const gradRow = C('gr' + i);
+    sel.addEventListener('change', () => {
+        gradRow.style.display = sel.value === '2' ? 'block' : 'none';
+    });
+    function updateGP() {
+        const cols = [C('g'+i+'a').value, C('g'+i+'b').value, C('g'+i+'c').value, C('g'+i+'d').value, C('g'+i+'e').value];
+        C('gp' + i).style.background = `linear-gradient(to right, ${cols.join(', ')})`;
+    }
+    ['a','b','c','d','e'].forEach(l => C('g'+i+l).addEventListener('input', updateGP));
+    updateGP();
+}
+
+// Renderer switch
+C('renderer').addEventListener('change', () => {
+    activeRenderer = C('renderer').value;
+    if (activeRenderer === 'gpu') {
+        gpuCanvas.style.display = 'block'; cpuCanvas.style.display = 'none';
+    } else {
+        gpuCanvas.style.display = 'none'; cpuCanvas.style.display = 'block';
+    }
+});
+
+// Mouse
+gpuCanvas.addEventListener('mousemove', onMouse);
+cpuCanvas.addEventListener('mousemove', onMouse);
+function onMouse(e) {
+    mx = (e.clientX / innerWidth) * 2 - 1;
+    my = -((e.clientY / innerHeight) * 2 - 1);
+}
+
+/* ── Save / Load / Random ────────────────────── */
+const GLOBAL_IDS = ['curveType','speed','trail','motionBlur','tilt','perspective','intensity','rgbShift','glow','bloom','vignette','tracerOpacity','tracerWidth','tracerFade','blendMode','postFX','postFXAmt'];
+function getState() {
+    const s = {};
+    GLOBAL_IDS.forEach(id => s[id] = C(id).value);
+    s.rings = [];
+    for (let i = 0; i < 5; i++) {
+        s.rings.push({
+            en: C('en'+i).checked, col: C('col'+i).value, kv: C('kv'+i).value,
+            cm: C('cm'+i).value, cs: C('cs'+i).value,
+            ga: C('g'+i+'a').value, gb: C('g'+i+'b').value, gc: C('g'+i+'c').value, gd: C('g'+i+'d').value, ge: C('g'+i+'e').value,
+            bn: C('bn'+i).value, sc: C('sc'+i).value, sm: C('sm'+i).value, rev: C('rev'+i).classList.contains('active'),
+            rh: C('rh'+i).value, hs: C('hs'+i).value, rv: C('rv'+i).value, vs: C('vs'+i).value,
+            rfx: C('rfx'+i).value
+        });
+    }
+    return s;
+}
+function applyState(s) {
+    GLOBAL_IDS.forEach(id => { if(s[id]!==undefined){ C(id).value = s[id]; C(id).dispatchEvent(new Event('input')); C(id).dispatchEvent(new Event('change')); }});
+    if (s.rings) s.rings.forEach((r, i) => {
+        C('en'+i).checked = r.en; C('col'+i).value = r.col; C('kv'+i).value = r.kv;
+        C('cm'+i).value = r.cm; C('cs'+i).value = r.cs;
+        C('g'+i+'a').value = r.ga; C('g'+i+'b').value = r.gb; C('g'+i+'c').value = r.gc; C('g'+i+'d').value = r.gd; C('g'+i+'e').value = r.ge;
+        C('bn'+i).value = r.bn; C('sc'+i).value = r.sc; C('sm'+i).value = r.sm;
+        if (r.rev) C('rev'+i).classList.add('active'); else C('rev'+i).classList.remove('active');
+        C('rh'+i).value = r.rh; C('hs'+i).value = r.hs; C('rv'+i).value = r.rv; C('vs'+i).value = r.vs;
+        if (r.rfx !== undefined) C('rfx'+i).value = r.rfx;
+        ['kv','cs','bn','sc','sm','rh','hs','rv','vs'].forEach(p => C(p+i).dispatchEvent(new Event('input')));
+        C('cm'+i).dispatchEvent(new Event('change'));
+        ['a','b','c','d','e'].forEach(l => C('g'+i+l).dispatchEvent(new Event('input')));
+    });
+}
+C('btn-save').onclick = () => { try { localStorage.setItem('moire-state', JSON.stringify(getState())); C('btn-save').textContent = '\u2713 Saved!'; setTimeout(() => C('btn-save').innerHTML = '&#128190; Save', 1200); } catch(e){} };
+C('btn-load').onclick = () => { try { const d = localStorage.getItem('moire-state'); if(d) applyState(JSON.parse(d)); } catch(e){} };
+function randHex() { return '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6,'0'); }
+C('btn-random').onclick = () => {
+    C('curveType').value = Math.floor(Math.random()*6); C('curveType').dispatchEvent(new Event('change'));
+    C('speed').value = (0.3 + Math.random()*1.7).toFixed(2); C('speed').dispatchEvent(new Event('input'));
+    C('trail').value = (0.005 + Math.random()*0.08).toFixed(3); C('trail').dispatchEvent(new Event('input'));
+    C('motionBlur').value = Math.floor(Math.random()*8); C('motionBlur').dispatchEvent(new Event('input'));
+    C('intensity').value = (0.5 + Math.random()*2).toFixed(2); C('intensity').dispatchEvent(new Event('input'));
+    C('rgbShift').value = (Math.random()*0.08).toFixed(3); C('rgbShift').dispatchEvent(new Event('input'));
+    C('glow').value = (Math.random()*2).toFixed(2); C('glow').dispatchEvent(new Event('input'));
+    C('bloom').value = (Math.random()*0.5).toFixed(2); C('bloom').dispatchEvent(new Event('input'));
+    C('tracerOpacity').value = (Math.random()*0.6).toFixed(2); C('tracerOpacity').dispatchEvent(new Event('input'));
+    C('postFX').value = Math.floor(Math.random()*9); C('postFX').dispatchEvent(new Event('change'));
+    C('postFXAmt').value = (0.3+Math.random()*0.7).toFixed(2); C('postFXAmt').dispatchEvent(new Event('input'));
+    const K_VALS = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,6,7,8];
+    for (let i = 0; i < 5; i++) {
+        C('en'+i).checked = i < 2 || Math.random() > 0.5;
+        C('col'+i).value = randHex();
+        C('kv'+i).value = K_VALS[Math.floor(Math.random()*K_VALS.length)]; C('kv'+i).dispatchEvent(new Event('input'));
+        C('bn'+i).value = 1+Math.floor(Math.random()*16); C('bn'+i).dispatchEvent(new Event('input'));
+        C('sc'+i).value = (0.05+Math.random()*0.4).toFixed(3); C('sc'+i).dispatchEvent(new Event('input'));
+        C('sm'+i).value = (0.2+Math.random()*2).toFixed(2); C('sm'+i).dispatchEvent(new Event('input'));
+        C('cm'+i).value = Math.floor(Math.random()*3); C('cm'+i).dispatchEvent(new Event('change'));
+        C('hs'+i).value = (Math.random()*1.2-0.6).toFixed(2); C('hs'+i).dispatchEvent(new Event('input'));
+        C('vs'+i).value = (Math.random()*0.6-0.3).toFixed(2); C('vs'+i).dispatchEvent(new Event('input'));
+        C('rfx'+i).value = Math.floor(Math.random()*12); C('rfx'+i).dispatchEvent(new Event('change'));
+        ['a','b','c','d','e'].forEach(l => { C('g'+i+l).value = randHex(); C('g'+i+l).dispatchEvent(new Event('input')); });
+    }
+};
+
+/* ── Per-ring color helper ───────────────────── */
+function getRingGradientStops(i) {
+    return [hexToVec3(C('g'+i+'a').value), hexToVec3(C('g'+i+'b').value), hexToVec3(C('g'+i+'c').value), hexToVec3(C('g'+i+'d').value), hexToVec3(C('g'+i+'e').value)];
+}
+
+// Returns the single color for the entire ring at a given time (all balls same color)
+function getRingColor(ringIdx, time) {
+    const mode = parseInt(C('cm' + ringIdx).value);
+    const spd = V('cs' + ringIdx);
+    if (mode === 1) {
+        // Hue chase: hue shifts over time, same for all balls on this ring
+        return hsvToRgb(time * spd * 0.1 + ringIdx * 0.2, 1, 1);
+    }
+    if (mode === 2) {
+        // Gradient cycle: sample gradient at time-based phase
+        const phase = time * spd * 0.3;
+        return sampleGradient(phase, getRingGradientStops(ringIdx));
+    }
+    // Static: use color picker
+    return hexToVec3(C('col' + ringIdx).value);
+}
+
+/* ══════════════════════════════════════════════════
+   GPU RENDERER (WebGL 2)
+   ══════════════════════════════════════════════════ */
+let gl = null;
+try {
+    gl = gpuCanvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+    if (gl) gl.getExtension('EXT_color_buffer_float');
+} catch(e) {}
+
+if (!gl) {
+    C('renderer').value = 'cpu';
+    C('renderer').querySelector('option[value="gpu"]').disabled = true;
+    activeRenderer = 'cpu';
+    gpuCanvas.style.display = 'none'; cpuCanvas.style.display = 'block';
+    C('gpu-info').textContent = 'WebGL 2 not available';
+} else {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) C('gpu-info').textContent = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+    else C('gpu-info').textContent = 'GPU info unavailable';
+}
+
+/* ── Shaders ─────────────────────────────────── */
+const QUAD_VS = `#version 300 es
+layout(location=0) in vec2 a_pos;
+out vec2 v_uv;
+void main(){ v_uv = a_pos*.5+.5; gl_Position = vec4(a_pos,0,1); }`;
+
+const SCENE_FS = `#version 300 es
+precision highp float;
+uniform float u_time;
+uniform vec2  u_res;
+uniform float u_speed;
+uniform float u_tilt;
+uniform float u_perspective;
+uniform float u_glow;
+uniform float u_intensity;
+uniform int   u_motionBlur;
+uniform float u_tracerOpacity;
+uniform float u_tracerWidth;
+uniform float u_tracerFade;
+uniform int   u_blendMode;
+uniform vec3  u_cols[5];
+uniform float u_scales[5];
+uniform float u_enabled[5];
+uniform float u_rotH[5];
+uniform float u_rotV[5];
+uniform int   u_balls[5];
+uniform float u_speedMul[5];
+uniform float u_ks[5];
+uniform int   u_ringFX[5];
+uniform vec2  u_mouse;
+uniform int   u_curveType;
+uniform float u_period;
+out vec4 o_color;
+
+#define PI  3.14159265359
+
+vec2 tilt3D(vec2 p, vec2 mouse, float tiltAmt, float persp, float eH, float eV){
+    float rotY = mouse.x * tiltAmt + eH;
+    float rotX = -mouse.y * tiltAmt + eV;
+    vec3 pos = vec3(p, 0.0);
+    float cy=cos(rotY), sy=sin(rotY);
+    pos = vec3(pos.x*cy + pos.z*sy, pos.y, -pos.x*sy + pos.z*cy);
+    float cx=cos(rotX), sx=sin(rotX);
+    pos = vec3(pos.x, pos.y*cx - pos.z*sx, pos.y*sx + pos.z*cx);
+    float w = persp / (persp + pos.z);
+    return pos.xy * w;
+}
+
+// Blend mode functions
+vec3 blendScreen(vec3 base, vec3 blend) { return 1.0 - (1.0 - base) * (1.0 - blend); }
+vec3 blendAdd(vec3 base, vec3 blend) { return min(base + blend, 1.0); }
+vec3 blendMultiply(vec3 base, vec3 blend) { return base * blend; }
+float overlayChannel(float b, float l) { return l < 0.5 ? 2.0*b*l : 1.0 - 2.0*(1.0-b)*(1.0-l); }
+vec3 blendOverlay(vec3 base, vec3 blend) { return vec3(overlayChannel(base.r,blend.r), overlayChannel(base.g,blend.g), overlayChannel(base.b,blend.b)); }
+vec3 blendDifference(vec3 base, vec3 blend) { return abs(base - blend); }
+vec3 blendExclusion(vec3 base, vec3 blend) { return base + blend - 2.0*base*blend; }
+vec3 blendColorDodge(vec3 base, vec3 blend) { return min(base / max(1.0 - blend, 0.001), 1.0); }
+float softLightCh(float b, float l) { return l < 0.5 ? b - (1.0 - 2.0*l)*b*(1.0-b) : b + (2.0*l - 1.0)*(sqrt(b) - b); }
+vec3 blendSoftLight(vec3 base, vec3 blend) { return vec3(softLightCh(base.r,blend.r), softLightCh(base.g,blend.g), softLightCh(base.b,blend.b)); }
+
+vec3 applyBlend(vec3 base, vec3 blend, int mode){
+    if(mode == 1) return blendScreen(base, blend);
+    if(mode == 2) return blendAdd(base, blend);
+    if(mode == 3) return blendMultiply(base, blend);
+    if(mode == 4) return blendOverlay(base, blend);
+    if(mode == 5) return blendDifference(base, blend);
+    if(mode == 6) return blendExclusion(base, blend);
+    if(mode == 7) return blendColorDodge(base, blend);
+    if(mode == 8) return blendSoftLight(base, blend);
+    return base + blend; // Normal: additive (default)
+}
+
+vec3 s_rgb2hsv(vec3 c){
+    vec4 K=vec4(0.,-1./3.,2./3.,-1.),p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g)),q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));
+    float d=q.x-min(q.w,q.y),e=1.0e-10;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);
+}
+vec3 s_hsv2rgb(vec3 c){
+    vec3 p=abs(fract(c.xxx+vec3(1.,2./3.,1./3.))*6.-3.);return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y);
+}
+vec3 applyRingFX(vec3 c, int fx, float time){
+    if(fx == 0) return c;
+    if(fx == 1) return max(vec3(0), 1.0 - c);
+    vec3 hsv = s_rgb2hsv(clamp(c, 0.0, 1.0));
+    if(fx == 2){ hsv.x = fract(hsv.x + 0.333); return s_hsv2rgb(hsv); }
+    if(fx == 3){ hsv.x = fract(hsv.x + 0.667); return s_hsv2rgb(hsv); }
+    if(fx == 4){ hsv.x = fract(hsv.x + time*0.1); return s_hsv2rgb(hsv); }
+    if(fx == 5){ return mix(c, 1.0-c, step(0.5, c)); }
+    if(fx == 6){ return floor(c * 4.0 + 0.5) / 4.0; }
+    if(fx == 7){ hsv.y *= 0.2; return s_hsv2rgb(hsv); }
+    if(fx == 8){ hsv.y = min(hsv.y * 2.0, 1.0); return s_hsv2rgb(hsv); }
+    if(fx == 9){ return c * 2.5; }
+    if(fx == 10){ float lum=dot(c,vec3(.299,.587,.114)); return vec3(smoothstep(0.,.33,lum),smoothstep(.33,.66,lum),smoothstep(.66,1.,lum)); }
+    if(fx == 11){ return c * c * 3.0; }
+    return c;
+}
+
+vec2 curvePoint(float k, float theta, int ct){
+    if(ct == 0){
+        float r = cos(k * theta);
+        return vec2(r * cos(theta), r * sin(theta));
+    }
+    if(ct == 1){
+        float n = k * 2.0 + 2.0;
+        float a = 1.0/n;
+        return vec2((1.0-a)*cos(theta) + a*cos((n-1.0)*theta),
+                    (1.0-a)*sin(theta) - a*sin((n-1.0)*theta));
+    }
+    if(ct == 2){
+        float n = k * 2.0 + 1.0;
+        float inv = 1.0/(n+2.0);
+        float np1 = n + 1.0;
+        return vec2(np1*inv*cos(theta) - inv*cos(np1*theta),
+                    np1*inv*sin(theta) - inv*sin(np1*theta));
+    }
+    if(ct == 3){
+        float n = k * 2.0 + 2.5;
+        float a = 1.0/n;
+        float d = 0.7*a;
+        return vec2((1.0-a)*cos(theta) + d*cos((n-1.0)*theta),
+                    (1.0-a)*sin(theta) - d*sin((n-1.0)*theta));
+    }
+    if(ct == 4){
+        return vec2(sin(k*theta + 1.5708), sin((k+1.0)*theta));
+    }
+    float r = 0.5 + 0.5*sin(k * theta);
+    return vec2(r * cos(theta), r * sin(theta));
+}
+
+void main(){
+    vec2 uv = (gl_FragCoord.xy - .5*u_res) / min(u_res.x, u_res.y);
+    vec3 col = vec3(0);
+
+    float ks[5] = float[5](u_ks[0], u_ks[1], u_ks[2], u_ks[3], u_ks[4]);
+    float br[5] = float[5](2.50, 1.80, 1.30, 1.00, 0.80);
+    float baseSp[5] = float[5](0.80, 0.60, 0.45, 0.35, 0.28);
+    float period = u_period;
+
+    int blurSamples = max(1, u_motionBlur);
+    float blurInv = 1.0 / float(blurSamples);
+    float blurDt = 0.008 * u_speed;
+
+    // ── Tracer paths with blend modes ──
+    if(u_tracerOpacity > 0.001){
+        float pixW = u_tracerWidth / min(u_res.x, u_res.y);
+        for(int i = 0; i < 5; i++){
+            if(u_enabled[i] < 0.5) continue;
+            float k = ks[i];
+            float scale = u_scales[i];
+            vec3 c = u_cols[i];
+            int n = u_balls[i];
+            float speed = baseSp[i] * u_speed * u_speedMul[i];
+            float spacing = period / float(max(n, 1));
+
+            if(length(uv) > scale * 2.5) continue;
+
+            vec3 tracerContrib = vec3(0);
+            float tracerAlpha = 0.0;
+
+            int NUM_CP = 80;
+            float cpStep = period / float(NUM_CP);
+            vec2 cp0, cp1, cp2, cp3;
+            float th;
+
+            th = -cpStep;
+            cp0 = tilt3D(curvePoint(k, th, u_curveType) * scale, u_mouse, u_tilt, u_perspective, u_rotH[i], u_rotV[i]);
+            th = 0.0;
+            cp1 = tilt3D(curvePoint(k, th, u_curveType) * scale, u_mouse, u_tilt, u_perspective, u_rotH[i], u_rotV[i]);
+            th = cpStep;
+            cp2 = tilt3D(curvePoint(k, th, u_curveType) * scale, u_mouse, u_tilt, u_perspective, u_rotH[i], u_rotV[i]);
+
+            for(int seg = 0; seg < 80; seg++){
+                th = float(seg + 2) * cpStep;
+                cp3 = tilt3D(curvePoint(k, th, u_curveType) * scale, u_mouse, u_tilt, u_perspective, u_rotH[i], u_rotV[i]);
+
+                vec2 prev = cp1;
+                for(int sub = 1; sub <= 4; sub++){
+                    float t = float(sub) * 0.25;
+                    float t2 = t * t, t3 = t2 * t;
+                    vec2 sp0 = (-t3+2.0*t2-t)*0.5*cp0 + (3.0*t3-5.0*t2+2.0)*0.5*cp1 + (-3.0*t3+4.0*t2+t)*0.5*cp2 + (t3-t2)*0.5*cp3;
+
+                    vec2 ab = sp0 - prev;
+                    float lenSq = dot(ab, ab);
+                    float tt = lenSq > 1e-10 ? clamp(dot(uv - prev, ab) / lenSq, 0.0, 1.0) : 0.0;
+                    float d = length(uv - (prev + tt * ab));
+                    float lineVal = smoothstep(pixW, pixW * 0.1, d);
+
+                    if(u_tracerFade > 0.01){
+                        float thetaMid = (float(seg) + (float(sub) - 0.5) * 0.25) * cpStep;
+                        float behind = mod(u_time * speed - thetaMid, spacing) / spacing;
+                        lineVal *= exp(-behind * u_tracerFade);
+                    }
+
+                    // Accumulate using screen blend within the ring (clean overlap)
+                    float newAlpha = 1.0 - (1.0 - tracerAlpha) * (1.0 - lineVal);
+                    if(lineVal > 0.001){
+                        tracerContrib = mix(tracerContrib, c, lineVal / max(newAlpha, 0.001));
+                    }
+                    tracerAlpha = newAlpha;
+
+                    prev = sp0;
+                }
+                cp0 = cp1; cp1 = cp2; cp2 = cp3;
+            }
+
+            vec3 ringLayer = tracerContrib * tracerAlpha * u_tracerOpacity;
+            ringLayer = applyRingFX(ringLayer, u_ringFX[i], u_time);
+            // Apply chosen blend mode between rings
+            col = applyBlend(col, ringLayer, u_blendMode);
+        }
+    }
+
+    // ── Points (all balls same color per ring) ──
+    for(int i = 0; i < 5; i++){
+        if(u_enabled[i] < 0.5) continue;
+        int   n     = u_balls[i];
+        float k     = ks[i];
+        float scale = u_scales[i];
+        float speed = baseSp[i] * u_speed * u_speedMul[i];
+        float baseBr= br[i];
+        vec3  c     = u_cols[i];
+
+        for(int j = 0; j < 32; j++){
+            if(j >= n) break;
+            for(int mb = 0; mb < 16; mb++){
+                if(mb >= blurSamples) break;
+                float tOff = float(mb) * blurDt;
+                float blurFade = 1.0 - float(mb) / float(blurSamples);
+
+                float theta = period * float(j) / float(max(n,1)) + (u_time - tOff) * speed;
+                vec2 rawP = curvePoint(k, theta, u_curveType);
+                float rNorm = length(rawP);
+                vec2 pp = tilt3D(rawP * scale, u_mouse, u_tilt, u_perspective, u_rotH[i], u_rotV[i]);
+
+                float d = length(uv - pp);
+                float tipMod = 0.35 + 0.65 * rNorm;
+                float core = exp(-d*d*10000.0) * baseBr * tipMod * blurFade * blurInv;
+                float halo = u_glow * 0.00002 * baseBr * tipMod * blurFade * blurInv / (d*d + 0.0001);
+                vec3 samp = c * (core + halo);
+                samp = applyRingFX(samp, u_ringFX[i], u_time);
+                col = applyBlend(col, samp, u_blendMode);
+            }
+        }
+    }
+
+    col *= u_intensity;
+    o_color = vec4(col, 1.0);
+}`;
+
+const COMPOSITE_FS = `#version 300 es
+precision highp float;
+uniform sampler2D u_prev;
+uniform sampler2D u_scene;
+uniform float     u_fade;
+in  vec2 v_uv;
+out vec4 o_color;
+void main(){
+    vec3 prev  = texture(u_prev,  v_uv).rgb * u_fade;
+    vec3 scene = texture(u_scene, v_uv).rgb;
+    o_color = vec4(prev + scene, 1.0);
+}`;
+
+const BLUR_FS = `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform vec2 u_dir;
+uniform vec2 u_res;
+in vec2 v_uv;
+out vec4 o_color;
+void main(){
+    vec3 c = vec3(0);
+    float w[5] = float[5](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+    vec2 texel = u_dir / u_res;
+    c += texture(u_tex, v_uv).rgb * w[0];
+    for(int i=1;i<5;i++){
+        vec2 off = texel * float(i) * 2.0;
+        c += texture(u_tex, v_uv + off).rgb * w[i];
+        c += texture(u_tex, v_uv - off).rgb * w[i];
+    }
+    o_color = vec4(c, 1.0);
+}`;
+
+const POST_FS = `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform sampler2D u_bloom;
+uniform vec2  u_res;
+uniform float u_time;
+uniform vec2  u_mouse;
+uniform float u_rgbShift;
+uniform float u_bloomAmt;
+uniform float u_vignette;
+uniform int   u_postFX;
+uniform float u_postFXAmt;
+in  vec2 v_uv;
+out vec4 o_color;
+
+vec3 rgb2hsv(vec3 c){
+    vec4 K=vec4(0.,-1./3.,2./3.,-1.),p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g)),q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));
+    float d=q.x-min(q.w,q.y),e=1.0e-10;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);
+}
+vec3 hsv2rgb(vec3 c){
+    vec3 p=abs(fract(c.xxx+vec3(1.,2./3.,1./3.))*6.-3.);return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y);
+}
+
+void main(){
+    vec2 uv = v_uv;
+    vec3 col;
+    if(u_rgbShift > 0.0001){
+        vec2 center = vec2(0.5) + u_mouse * 0.1;
+        vec2 dir = uv - center;
+        float dist = length(dir);
+        float ab = dist * u_rgbShift * (1.0 + 0.3*sin(u_time*0.6));
+        vec2 off = dir * ab;
+        col = vec3(texture(u_tex, uv + off).r, texture(u_tex, uv).g, texture(u_tex, uv - off).b);
+    } else {
+        col = texture(u_tex, uv).rgb;
+    }
+    if(u_bloomAmt > 0.001) col += texture(u_bloom, v_uv).rgb * u_bloomAmt;
+    col = col*(2.51*col+0.03)/(col*(2.43*col+0.59)+0.14);
+    if(u_vignette > 0.01){
+        float vig = 1.0 - length(v_uv - 0.5) * u_vignette;
+        col *= smoothstep(0.0, 1.0, vig);
+    }
+    col *= 0.97 + 0.03*sin(gl_FragCoord.y*1.5);
+    float grain = fract(sin(dot(gl_FragCoord.xy+fract(u_time)*137.0, vec2(12.9898,78.233)))*43758.5453);
+    col += (grain-0.5)*0.015;
+
+    // ── Post FX ──
+    if(u_postFX > 0){
+        vec3 fx = col;
+        if(u_postFX == 1){ fx = 1.0 - col; } // Invert
+        if(u_postFX == 2){ // Neon edge glow
+            vec2 px = 1.5/u_res;
+            vec3 l = texture(u_tex, v_uv+vec2(-px.x,0)).rgb; vec3 r2 = texture(u_tex, v_uv+vec2(px.x,0)).rgb;
+            vec3 up = texture(u_tex, v_uv+vec2(0,px.y)).rgb; vec3 dn = texture(u_tex, v_uv+vec2(0,-px.y)).rgb;
+            vec3 edge = abs(l-r2)+abs(up-dn);
+            fx = col + edge * 3.0;
+        }
+        if(u_postFX == 3){ // Color rotate
+            vec3 hsv = rgb2hsv(col); hsv.x = fract(hsv.x + u_time*0.05); fx = hsv2rgb(hsv);
+        }
+        if(u_postFX == 4){ // Solarize
+            fx = mix(col, 1.0-col, step(0.5, col));
+        }
+        if(u_postFX == 5){ // Thermal
+            float lum = dot(col, vec3(0.299,0.587,0.114));
+            fx = vec3(smoothstep(0.,0.33,lum), smoothstep(0.33,0.66,lum), smoothstep(0.66,1.,lum));
+            fx = mix(fx, vec3(1.,0.3,0.), smoothstep(0.7,1.,lum));
+        }
+        if(u_postFX == 6){ // Hue shift
+            vec3 hsv = rgb2hsv(col); hsv.x = fract(hsv.x + 0.33); fx = hsv2rgb(hsv);
+        }
+        if(u_postFX == 7){ // Posterize
+            float levels = 5.0; fx = floor(col * levels + 0.5) / levels;
+        }
+        if(u_postFX == 8){ // Acid
+            vec3 hsv = rgb2hsv(col); hsv.x = fract(hsv.x + sin(v_uv.x*20.+u_time)*0.15 + cos(v_uv.y*15.+u_time*0.7)*0.15); hsv.y = min(hsv.y*1.5, 1.0); fx = hsv2rgb(hsv);
+        }
+        col = mix(col, fx, u_postFXAmt);
+    }
+
+    o_color = vec4(clamp(col,0.0,1.0), 1.0);
+}`;
+
+/* ── GPU setup ───────────────────────────────── */
+let gpuFrame = null;
+if (gl) {
+    function mkShader(type, src) {
+        const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+        return s;
+    }
+    function mkProgram(vs, fs) {
+        const p = gl.createProgram();
+        gl.attachShader(p, mkShader(gl.VERTEX_SHADER, vs));
+        gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p));
+        return p;
+    }
+    const sceneProg = mkProgram(QUAD_VS, SCENE_FS);
+    const compProg  = mkProgram(QUAD_VS, COMPOSITE_FS);
+    const blurProg  = mkProgram(QUAD_VS, BLUR_FS);
+    const postProg  = mkProgram(QUAD_VS, POST_FS);
+    function UL(prog, name) { return gl.getUniformLocation(prog, name); }
+    const u = {
+        scene: {
+            time: UL(sceneProg,'u_time'), res: UL(sceneProg,'u_res'),
+            speed: UL(sceneProg,'u_speed'), tilt: UL(sceneProg,'u_tilt'),
+            perspective: UL(sceneProg,'u_perspective'), glow: UL(sceneProg,'u_glow'),
+            intensity: UL(sceneProg,'u_intensity'),
+            motionBlur: UL(sceneProg,'u_motionBlur'),
+            tracerOpacity: UL(sceneProg,'u_tracerOpacity'),
+            tracerWidth: UL(sceneProg,'u_tracerWidth'),
+            tracerFade: UL(sceneProg,'u_tracerFade'),
+            blendMode: UL(sceneProg,'u_blendMode'),
+            curveType: UL(sceneProg,'u_curveType'),
+            period: UL(sceneProg,'u_period'),
+            mouse: UL(sceneProg,'u_mouse'),
+            cols: [], scales: [], enabled: [], rotH: [], rotV: [], balls: [], speedMul: [], ks: [], ringFX: [],
+        },
+        comp: { prev: UL(compProg,'u_prev'), scene: UL(compProg,'u_scene'), fade: UL(compProg,'u_fade') },
+        blur: { tex: UL(blurProg,'u_tex'), dir: UL(blurProg,'u_dir'), res: UL(blurProg,'u_res') },
+        post: { tex: UL(postProg,'u_tex'), bloom: UL(postProg,'u_bloom'), res: UL(postProg,'u_res'),
+                time: UL(postProg,'u_time'), mouse: UL(postProg,'u_mouse'),
+                rgbShift: UL(postProg,'u_rgbShift'), bloomAmt: UL(postProg,'u_bloomAmt'),
+                vignette: UL(postProg,'u_vignette'),
+                postFX: UL(postProg,'u_postFX'), postFXAmt: UL(postProg,'u_postFXAmt') },
+    };
+    for (let i = 0; i < 5; i++) {
+        u.scene.cols.push(UL(sceneProg, `u_cols[${i}]`));
+        u.scene.scales.push(UL(sceneProg, `u_scales[${i}]`));
+        u.scene.enabled.push(UL(sceneProg, `u_enabled[${i}]`));
+        u.scene.rotH.push(UL(sceneProg, `u_rotH[${i}]`));
+        u.scene.rotV.push(UL(sceneProg, `u_rotV[${i}]`));
+        u.scene.balls.push(UL(sceneProg, `u_balls[${i}]`));
+        u.scene.speedMul.push(UL(sceneProg, `u_speedMul[${i}]`));
+        u.scene.ks.push(UL(sceneProg, `u_ks[${i}]`));
+        u.scene.ringFX.push(UL(sceneProg, `u_ringFX[${i}]`));
+    }
+
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    function mkFBO(w, h) {
+        const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return { fbo, tex };
+    }
+
+    let sceneFBO, trail, blurFBOs, tIdx = 0;
+    function initFBOs(w, h) {
+        [sceneFBO, ...(trail || []), ...(blurFBOs || [])].forEach(f => { if(f){gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex);} });
+        sceneFBO = mkFBO(w, h); trail = [mkFBO(w, h), mkFBO(w, h)];
+        const bw = Math.floor(w/2), bh = Math.floor(h/2);
+        blurFBOs = [mkFBO(bw, bh), mkFBO(bw, bh)]; tIdx = 0;
+        for (const t of [...trail, ...blurFBOs]) { gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT); }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    function resizeGPU() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const w = Math.floor(innerWidth * dpr), h = Math.floor(innerHeight * dpr);
+        if (gpuCanvas.width === w && gpuCanvas.height === h) return;
+        gpuCanvas.width = w; gpuCanvas.height = h;
+        gpuCanvas.style.width = innerWidth + 'px'; gpuCanvas.style.height = innerHeight + 'px';
+        initFBOs(w, h);
+    }
+    function quad() { gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+
+    gpuFrame = function(t, dt) {
+        resizeGPU();
+        const w = gpuCanvas.width, h = gpuCanvas.height;
+        const trailFade = Math.pow(V('trail'), dt);
+        gl.bindVertexArray(vao);
+
+        // Pass 1: Scene
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fbo);
+        gl.viewport(0, 0, w, h);
+        gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(sceneProg);
+        gl.uniform1f(u.scene.time, t);
+        gl.uniform2f(u.scene.res, w, h);
+        gl.uniform1f(u.scene.speed, V('speed'));
+        gl.uniform1f(u.scene.tilt, V('tilt'));
+        gl.uniform1f(u.scene.perspective, V('perspective'));
+        gl.uniform1f(u.scene.glow, V('glow'));
+        gl.uniform1f(u.scene.intensity, V('intensity'));
+        gl.uniform1i(u.scene.motionBlur, parseInt(C('motionBlur').value));
+        gl.uniform1f(u.scene.tracerOpacity, V('tracerOpacity'));
+        gl.uniform1f(u.scene.tracerWidth, V('tracerWidth'));
+        gl.uniform1f(u.scene.tracerFade, V('tracerFade'));
+        gl.uniform1i(u.scene.blendMode, parseInt(C('blendMode').value));
+        gl.uniform1i(u.scene.curveType, parseInt(C('curveType').value));
+        gl.uniform1f(u.scene.period, getCurvePeriod(parseInt(C('curveType').value)));
+        gl.uniform2f(u.scene.mouse, smx, smy);
+        const zoom = V('zoom');
+        for (let i = 0; i < 5; i++) {
+            const cv = getRingColor(i, t);
+            gl.uniform3f(u.scene.cols[i], cv[0], cv[1], cv[2]);
+            gl.uniform1f(u.scene.scales[i], V('sc' + i) * zoom);
+            gl.uniform1f(u.scene.enabled[i], B('en' + i));
+            gl.uniform1f(u.scene.rotH[i], V('rh' + i) + accH[i]);
+            gl.uniform1f(u.scene.rotV[i], V('rv' + i) + accV[i]);
+            gl.uniform1i(u.scene.balls[i], parseInt(C('bn' + i).value));
+            gl.uniform1f(u.scene.speedMul[i], getSpeedMul(i));
+            gl.uniform1f(u.scene.ks[i], V('kv' + i));
+            gl.uniform1i(u.scene.ringFX[i], parseInt(C('rfx' + i).value));
+        }
+        quad();
+
+        // Pass 2: Trail composite
+        const rd = trail[tIdx], wr = trail[1 - tIdx];
+        gl.bindFramebuffer(gl.FRAMEBUFFER, wr.fbo); gl.viewport(0, 0, w, h);
+        gl.useProgram(compProg);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, rd.tex); gl.uniform1i(u.comp.prev, 0);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex); gl.uniform1i(u.comp.scene, 1);
+        gl.uniform1f(u.comp.fade, trailFade); quad();
+
+        // Pass 3: Bloom
+        const bw = Math.floor(w/2), bh = Math.floor(h/2);
+        gl.useProgram(blurProg);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurFBOs[0].fbo); gl.viewport(0, 0, bw, bh);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wr.tex); gl.uniform1i(u.blur.tex, 0);
+        gl.uniform2f(u.blur.dir, 1, 0); gl.uniform2f(u.blur.res, bw, bh); quad();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurFBOs[1].fbo);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, blurFBOs[0].tex);
+        gl.uniform2f(u.blur.dir, 0, 1); quad();
+
+        // Pass 4: Post
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h);
+        gl.useProgram(postProg);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wr.tex); gl.uniform1i(u.post.tex, 0);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, blurFBOs[1].tex); gl.uniform1i(u.post.bloom, 1);
+        gl.uniform2f(u.post.res, w, h); gl.uniform1f(u.post.time, t);
+        gl.uniform2f(u.post.mouse, smx, smy);
+        gl.uniform1f(u.post.rgbShift, V('rgbShift'));
+        gl.uniform1f(u.post.bloomAmt, V('bloom'));
+        gl.uniform1f(u.post.vignette, V('vignette'));
+        gl.uniform1i(u.post.postFX, parseInt(C('postFX').value));
+        gl.uniform1f(u.post.postFXAmt, V('postFXAmt'));
+        quad();
+        tIdx = 1 - tIdx;
+    };
+}
+
+/* ══════════════════════════════════════════════════
+   CPU RENDERER (Canvas 2D)
+   ══════════════════════════════════════════════════ */
+const cpuCtx = cpuCanvas.getContext('2d');
+
+function cpuRingFX(rgb, fx, time) {
+    if (fx === 0) return rgb;
+    let [r, g, b] = rgb;
+    if (fx === 1) return [1 - r, 1 - g, 1 - b]; // Invert
+    // Convert to HSV for hue-based FX
+    const mx2 = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx2 - mn;
+    let h = 0, s = mx2 > 0 ? d / mx2 : 0, v = mx2;
+    if (d > 0) { if (mx2 === r) h = ((g - b) / d + 6) % 6 / 6; else if (mx2 === g) h = ((b - r) / d + 2) / 6; else h = ((r - g) / d + 4) / 6; }
+    function hsv2(h2, s2, v2) { h2 = ((h2 % 1) + 1) % 1; const i = Math.floor(h2*6), f = h2*6-i, p = v2*(1-s2), q = v2*(1-f*s2), t = v2*(1-(1-f)*s2); switch(i%6){ case 0:return[v2,t,p]; case 1:return[q,v2,p]; case 2:return[p,v2,t]; case 3:return[p,q,v2]; case 4:return[t,p,v2]; case 5:return[v2,p,q]; } }
+    if (fx === 2) return hsv2(h + 0.333, s, v);
+    if (fx === 3) return hsv2(h + 0.667, s, v);
+    if (fx === 4) return hsv2(h + time * 0.1, s, v);
+    if (fx === 5) return [r > 0.5 ? 1-r : r, g > 0.5 ? 1-g : g, b > 0.5 ? 1-b : b]; // Solarize
+    if (fx === 6) return [Math.round(r*4)/4, Math.round(g*4)/4, Math.round(b*4)/4]; // Posterize
+    if (fx === 7) return hsv2(h, s * 0.2, v); // Desaturate
+    if (fx === 8) return hsv2(h, Math.min(s * 2, 1), v); // Oversaturate
+    if (fx === 9) return [r * 2.5, g * 2.5, b * 2.5]; // Neon Boost
+    if (fx === 10) { const lum = r*0.299+g*0.587+b*0.114; return [lum<0.33?lum*3:1, lum>0.33&&lum<0.66?(lum-0.33)*3:lum>=0.66?1:0, lum>0.66?(lum-0.66)*3:0]; } // Thermal
+    if (fx === 11) return [r*r*3, g*g*3, b*b*3]; // High Contrast
+    return rgb;
+}
+
+function resizeCPU() {
+    const w = innerWidth, h = innerHeight;
+    if (cpuCanvas.width === w && cpuCanvas.height === h) return;
+    cpuCanvas.width = w; cpuCanvas.height = h;
+    cpuCanvas.style.width = w + 'px'; cpuCanvas.style.height = h + 'px';
+}
+
+function cpuFrame(t, dt) {
+    resizeCPU();
+    const ctx = cpuCtx;
+    const w = cpuCanvas.width, h = cpuCanvas.height;
+    const halfMin = Math.min(w, h) / 2;
+    const cxc = w / 2, cyc = h / 2;
+    const fade = 1 - Math.pow(V('trail'), dt);
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(fade, 1)})`;
+    ctx.fillRect(0, 0, w, h);
+
+    const tiltAmt = V('tilt');
+    const persp = V('perspective');
+    const tracerOp = V('tracerOpacity');
+    const tracerW = V('tracerWidth');
+    const globalSpeed = V('speed');
+    const colorIntensity = V('intensity');
+    const ct = parseInt(C('curveType').value);
+    const period = getCurvePeriod(ct);
+
+    const zoom = V('zoom');
+    for (let i = 0; i < 5; i++) {
+        if (!C('en' + i).checked) continue;
+        const k = V('kv' + i);
+        const scale = V('sc' + i) * zoom;
+        const speed = BASE_SPEEDS[i] * globalSpeed * getSpeedMul(i);
+        const n = parseInt(C('bn' + i).value);
+        const spacing = period / Math.max(n, 1);
+        const eH = V('rh' + i) + accH[i];
+        const eV = V('rv' + i) + accV[i];
+        // All balls same color
+        const baseColor = getRingColor(i, t);
+        const rfx = parseInt(C('rfx' + i).value);
+        const fxColor = cpuRingFX(baseColor, rfx, t);
+        const col = [fxColor[0]*colorIntensity, fxColor[1]*colorIntensity, fxColor[2]*colorIntensity];
+
+        if (tracerOp > 0.01) {
+            const steps = 200;
+            ctx.lineWidth = tracerW;
+            for (let s = 0; s < steps; s++) {
+                const theta = (s / steps) * period;
+                const thetaNext = ((s + 1) / steps) * period;
+                const [cx1, cy1] = curvePointJS(k, theta, ct);
+                const [cx2, cy2] = curvePointJS(k, thetaNext, ct);
+                const [sx1, sy1] = tilt3DJS(cx1*scale, cy1*scale, smx, smy, tiltAmt, persp, eH, eV);
+                const [sx2, sy2] = tilt3DJS(cx2*scale, cy2*scale, smx, smy, tiltAmt, persp, eH, eV);
+                let alpha = tracerOp;
+                const behind = ((t * speed - theta) % spacing + spacing) % spacing / spacing;
+                alpha *= Math.exp(-behind * V('tracerFade'));
+                ctx.strokeStyle = `rgba(${Math.min(Math.round(col[0]*255),255)},${Math.min(Math.round(col[1]*255),255)},${Math.min(Math.round(col[2]*255),255)},${alpha})`;
+                ctx.beginPath();
+                ctx.moveTo(cxc + sx1 * halfMin, cyc - sy1 * halfMin);
+                ctx.lineTo(cxc + sx2 * halfMin, cyc - sy2 * halfMin);
+                ctx.stroke();
+            }
+        }
+
+        for (let j = 0; j < n; j++) {
+            const theta = period * j / Math.max(n, 1) + t * speed;
+            const [cpx, cpy] = curvePointJS(k, theta, ct);
+            const rNorm = Math.sqrt(cpx*cpx + cpy*cpy);
+            const [sx, sy] = tilt3DJS(cpx*scale, cpy*scale, smx, smy, tiltAmt, persp, eH, eV);
+            const px = cxc + sx * halfMin, py = cyc - sy * halfMin;
+            const br = BRIGHTNESSES[i];
+            const tipMod = 0.35 + 0.65 * rNorm;
+            const intensity = Math.min(br * tipMod * colorIntensity, 3);
+            const glowVal = V('glow');
+            if (glowVal > 0.01) {
+                const grad = ctx.createRadialGradient(px, py, 0, px, py, 12);
+                grad.addColorStop(0, `rgba(${Math.min(Math.round(col[0]*255),255)},${Math.min(Math.round(col[1]*255),255)},${Math.min(Math.round(col[2]*255),255)},${0.3*glowVal*intensity})`);
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(px - 12, py - 12, 24, 24);
+            }
+            ctx.fillStyle = `rgba(${Math.min(Math.round(col[0]*intensity*255),255)},${Math.min(Math.round(col[1]*intensity*255),255)},${Math.min(Math.round(col[2]*intensity*255),255)},1)`;
+            ctx.beginPath(); ctx.arc(px, py, 2.5, 0, PI * 2); ctx.fill();
+        }
+    }
+}
+/* ── Math Panel ─────────────────────────────────── */
+const CURVE_NAMES = ['Rose Curve','Hypocycloid','Epicycloid','Spirograph (Hypotrochoid)','Lissajous','Polar Sine Wave'];
+const CURVE_FORMULAS = [
+    'r = cos(k \u00b7 \u03b8)\nx = r \u00b7 cos(\u03b8),  y = r \u00b7 sin(\u03b8)',
+    'n = 2k + 2\nx = (1 \u2212 1/n)cos(\u03b8) + (1/n)cos((n\u22121)\u03b8)\ny = (1 \u2212 1/n)sin(\u03b8) \u2212 (1/n)sin((n\u22121)\u03b8)',
+    'n = 2k + 1\nx = (n+1)/(n+2) \u00b7 cos(\u03b8) \u2212 1/(n+2) \u00b7 cos((n+1)\u03b8)\ny = (n+1)/(n+2) \u00b7 sin(\u03b8) \u2212 1/(n+2) \u00b7 sin((n+1)\u03b8)',
+    'n = 2k + 2.5,  d = 0.7/n\nx = (1 \u2212 1/n)cos(\u03b8) + d \u00b7 cos((n\u22121)\u03b8)\ny = (1 \u2212 1/n)sin(\u03b8) \u2212 d \u00b7 sin((n\u22121)\u03b8)',
+    'x = sin(k \u00b7 \u03b8 + \u03c0/4)\ny = sin((k + 1) \u00b7 \u03b8)',
+    'r = \u00bd + \u00bd \u00b7 sin(k \u00b7 \u03b8)\nx = r \u00b7 cos(\u03b8),  y = r \u00b7 sin(\u03b8)'
+];
+function updateMathPanel() {
+    const ct = parseInt(C('curveType').value);
+    C('math-curve-name').textContent = CURVE_NAMES[ct];
+    C('math-formula').textContent = CURVE_FORMULAS[ct];
+    const subs = ['\u2081','\u2082','\u2083','\u2084','\u2085'];
+    let vals = '';
+    for (let i = 0; i < 5; i++) {
+        if (C('en' + i).checked) vals += 'k' + subs[i] + ' = ' + V('kv' + i).toFixed(1) + '   ';
+    }
+    vals += 'Period = ' + (getCurvePeriod(ct)/PI).toFixed(0) + '\u03c0';
+    C('math-values').textContent = vals;
+}
+
+/* ── Live Equation Display (Ring 1) ──────────── */
+const eqEl = document.getElementById('eq-display');
+const SIN = '<span class="fn-sin">sin</span>';
+const COS = '<span class="fn-cos">cos</span>';
+const LP = '<span class="eq-paren">(</span>';
+const RP = '<span class="eq-paren">)</span>';
+const LB = '<span class="eq-paren">[</span>';
+const RB = '<span class="eq-paren">]</span>';
+const EQ = '<span class="eq-op"> = </span>';
+const MUL = '<span class="eq-op"> · </span>';
+const MINUS = '<span class="eq-op"> − </span>';
+const PLUS = '<span class="eq-op"> + </span>';
+const THETA = '<span class="eq-var">θ</span>';
+const PI_SYM = '<span class="eq-var">π</span>';
+
+function eqNum(v) { return '<span class="eq-num">' + v + '</span>'; }
+function eqVar(v) { return '<span class="eq-var">' + v + '</span>'; }
+function eqFrac(n, d) { return '<span class="eq-paren">(</span>' + n + '<span class="eq-op">/</span>' + d + '<span class="eq-paren">)</span>'; }
+
+function fmtK(k) {
+    if (k === Math.floor(k)) return eqNum(k.toFixed(0));
+    // Check nice fractions
+    const fracs = [[0.5,'1','2'],[1.5,'3','2'],[2.5,'5','2'],[3.5,'7','2'],[4.5,'9','2'],[0.333,'1','3'],[0.667,'2','3'],[0.25,'1','4'],[0.75,'3','4']];
+    for (const [v, n, d] of fracs) { if (Math.abs(k - v) < 0.05) return eqFrac(eqNum(n), eqNum(d)); }
+    return eqNum(k.toFixed(1));
+}
+
+function updateEquationDisplay() {
+    if (!C('en0').checked) { eqEl.innerHTML = ''; return; }
+    const ct = parseInt(C('curveType').value);
+    const k = V('kv0');
+    const kStr = fmtK(k);
+    let html = '';
+
+    if (ct === 0) {
+        // Rose: r = cos(kθ),  x = r·cosθ,  y = r·sinθ
+        html = eqVar('r') + EQ + COS + LP + kStr + THETA + RP
+             + '<span class="eq-op"> , </span>'
+             + eqVar('x') + EQ + eqVar('r') + COS + THETA
+             + '<span class="eq-op"> , </span>'
+             + eqVar('y') + EQ + eqVar('r') + SIN + THETA;
+    } else if (ct === 1) {
+        // Hypocycloid: x = (1−a)cosθ + a·cos((n−1)θ)
+        const n = k * 2 + 2;
+        const nStr = eqNum(n.toFixed(0));
+        html = eqVar('x') + EQ
+             + LP + eqNum('1') + MINUS + eqFrac(eqNum('1'), nStr) + RP + COS + THETA
+             + PLUS + eqFrac(eqNum('1'), nStr) + COS + LP + LP + nStr + MINUS + eqNum('1') + RP + THETA + RP;
+    } else if (ct === 2) {
+        // Epicycloid: x = ((n+1)cosθ − cos((n+1)θ)) / (n+2)
+        const n = k * 2 + 1;
+        const nStr = eqNum(n.toFixed(0));
+        html = eqVar('x') + EQ
+             + eqFrac(eqNum(String(n+1)), eqNum(String(n+2))) + COS + THETA
+             + MINUS + eqFrac(eqNum('1'), eqNum(String(n+2))) + COS + LP + eqNum(String(n+1)) + THETA + RP;
+    } else if (ct === 3) {
+        // Spirograph: x = (1−1/n)cosθ + d·cos((n−1)θ)
+        const n = k * 2 + 2.5;
+        const nStr = eqNum(n.toFixed(1));
+        html = eqVar('x') + EQ
+             + LP + eqNum('1') + MINUS + eqFrac(eqNum('1'), nStr) + RP + COS + THETA
+             + PLUS + eqFrac(eqNum('0.7'), nStr) + COS + LP + LP + nStr + MINUS + eqNum('1') + RP + THETA + RP;
+    } else if (ct === 4) {
+        // Lissajous: x = sin(kθ + π/2),  y = sin((k+1)θ)
+        html = eqVar('x') + EQ + SIN + LP + kStr + THETA + PLUS + eqFrac(PI_SYM, eqNum('2')) + RP
+             + '<span class="eq-op"> , </span>'
+             + eqVar('y') + EQ + SIN + LP + LP + kStr + PLUS + eqNum('1') + RP + THETA + RP;
+    } else {
+        // Polar Sine: r = ½(1 + sin(kθ))
+        html = eqVar('r') + EQ + eqFrac(eqNum('1'), eqNum('2')) + LP + eqNum('1') + PLUS + SIN + LP + kStr + THETA + RP + RP
+             + '<span class="eq-op"> , </span>'
+             + eqVar('x') + EQ + eqVar('r') + COS + THETA
+             + '<span class="eq-op"> , </span>'
+             + eqVar('y') + EQ + eqVar('r') + SIN + THETA;
+    }
+
+    // Add ball count + k meta line
+    const balls = parseInt(C('bn0').value);
+    const meta = '<span class="eq-line eq-meta">' + eqVar('k') + '<span class="eq-op"> = </span>' + eqNum(k.toFixed(1))
+         + '<span class="eq-op"> · </span>' + eqNum(balls) + '<span class="eq-op"> ball' + (balls !== 1 ? 's' : '') + '</span></span>';
+    eqEl.innerHTML = '<span class="eq-line">' + html + '</span>' + meta;
+}
+/* ══════════════════════════════════════════════════
+   MAIN LOOP
+   ══════════════════════════════════════════════════ */
+function frame(ms) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(Math.max((ms - lastMs) / 1000, 0.001), 0.1);
+    lastMs = ms;
+    const t = ms * 0.001;
+    smx += (mx - smx) * Math.min(dt * 5, 1);
+    smy += (my - smy) * Math.min(dt * 5, 1);
+    fpsFrames++; fpsTime += dt;
+    if (fpsTime > 0.5) {
+        fpsEl.textContent = Math.round(fpsFrames / fpsTime) + ' fps (' + (activeRenderer === 'gpu' ? 'GPU' : 'CPU') + ')';
+        fpsFrames = 0; fpsTime = 0;
+    }
+    for (let i = 0; i < 5; i++) { accH[i] += dt * V('hs' + i); accV[i] += dt * V('vs' + i); }
+    updateMathPanel();
+    updateEquationDisplay();
+    if (activeRenderer === 'gpu' && gpuFrame) gpuFrame(t, dt);
+    else cpuFrame(t, dt);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

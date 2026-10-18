@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MONO — Pattern Engine</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="panel">
+  <header>
+    <h1>MONO</h1>
+    <span id="fps"></span>
+    <button id="resetBtn" title="reset to defaults">⟲</button>
+    <button id="hideBtn" title="hide panel (H)">×</button>
+  </header>
+
+  <div class="section">
+    <div class="secTitle">PATTERN</div>
+    <div id="patternBtns" class="btnRow"></div>
+  </div>
+
+  <div class="section">
+    <div class="secTitle">RANDOM · morphs over morph-time</div>
+    <div id="randomBtns" class="btnGrid"></div>
+  </div>
+
+  <div id="controls"></div>
+
+  <div class="section">
+    <div class="secTitle">PRESETS</div>
+    <div class="presetRow">
+      <input id="presetName" type="text" placeholder="preset name" spellcheck="false">
+      <button id="savePreset">SAVE</button>
+    </div>
+    <div id="presetList"></div>
+  </div>
+
+  <div class="section">
+    <div class="secTitle">IMAGE SOURCE</div>
+    <div class="btnRow">
+      <label class="fileBtn" style="flex:1">LOAD IMAGE<input id="imgFile" type="file" accept="image/*"></label>
+      <button id="camBtn">WEBCAM</button>
+    </div>
+    <div class="hint" id="imgInfo">no image — patterns run free</div>
+  </div>
+
+  <div class="section">
+    <div class="secTitle">GRAIN SOURCE</div>
+    <label class="fileBtn">LOAD GRAIN VIDEO<input id="grainFile" type="file" accept="video/*"></label>
+    <div class="hint" id="grainInfo">procedural grain active</div>
+  </div>
+
+  <div class="section">
+    <div class="secTitle">EXPORT</div>
+    <div class="btnRow">
+      <button id="exportPng">PNG</button>
+      <select id="exportScale"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select>
+      <button id="recBtn">● REC</button>
+    </div>
+    <div class="hint">WebM master · convert to ProRes with ffmpeg</div>
+  </div>
+
+  <footer>H panel · F fullscreen · R random · S png</footer>
+</div>
+
+<div id="toast"></div>
+<pre id="glError"></pre>
+
+<script src="js/app.js"></script>
+</body>
+</html>

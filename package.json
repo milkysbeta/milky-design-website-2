@@ -1,0 +1,17 @@
+{
+  "name": "milky-design-website-2",
+  "private": true,
+  "scripts": {
+    "build:vgpu": "vite build",
+    "check:vgpu": "vgpu check src/shaders/neon-atmosphere.wgsl",
+    "qa:vgpu": "node tools/qa-vgpu.js"
+  },
+  "dependencies": {
+    "vgpu": "0.4.0"
+  },
+  "devDependencies": {
+    "@vgpu/wgsl": "0.4.0",
+    "@webgpu/types": "^0.1.64",
+    "vite": "^7.1.3"
+  }
+}
