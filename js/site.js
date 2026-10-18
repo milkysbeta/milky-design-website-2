@@ -517,6 +517,8 @@ function startPanelPump() {
 
 function finishLoader() {
   const loader = $('#loader');
+  if (!loader || loader.dataset.started === 'true') return;
+  loader.dataset.started = 'true';
   const bar = $('#loaderBar');
   const count = $('#loaderCount');
   let value = 0;
@@ -563,10 +565,12 @@ async function boot() {
   addEventListener('resize', requestScrollUpdate, { passive: true });
   requestScrollUpdate();
 
+  // Let the page reveal on a predictable clock while the heavier WebGL scene
+  // finishes behind it. Slow networks should never strand visitors at 000.
+  finishLoader();
   await bootForest();
   void bootVgpuAtmosphere();
   startPanelPump();
-  finishLoader();
 }
 
 if (document.readyState === 'loading') {
